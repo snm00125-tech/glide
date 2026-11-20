@@ -125,6 +125,8 @@
     // 유튜브 웹은 손가락이 닿을 때와 뗄 때(스크롤 뒤에도) 항목 전체(썸네일+글, 바깥으로 12px)에 10% 회색 막을 띄우고 0.1~0.4초에 걸쳐 지움 (실기 측정)
     // → 스크롤할 때마다 썸네일이 깜빡여 버벅이는 듯 보였음. 링크 항목(구독·검색·영상 아래)은 안드로이드 기본 탭 강조색(파랑 40%)도 투명으로
     css += '.ytLockupViewModelHost>yt-touch-feedback-shape{display:none!important}' +
+      // 대신 Glide 누름 표시(아래 '누른 순간 반응'): 손가락이 머문 항목에만, 스크롤하면 바로 사라짐
+      '#glide-press{position:fixed;z-index:3;pointer-events:none;border-radius:12px;opacity:0;background:rgba(0,0,0,.08);transition:opacity .15s ease-out}#glide-press.d{background:rgba(255,255,255,.13)}#glide-press.on{opacity:1;transition:opacity .05s ease-in}' +
       ':is(ytm-rich-item-renderer,ytm-video-with-context-renderer,ytm-compact-video-renderer,yt-lockup-view-model,ytm-media-item),:is(ytm-rich-item-renderer,ytm-video-with-context-renderer,ytm-compact-video-renderer,yt-lockup-view-model,ytm-media-item) *{-webkit-tap-highlight-color:transparent!important}\n';
     // 전체화면 제목 줄 (1.8.9): 유튜브 앱처럼 조작부가 보일 때 왼쪽 위에 ⌄ · 제목(굵게 18) · 채널 이름(회색 12). 아래 '전체화면 제목 줄' 참고
     css += '#glide-fstitle{display:flex;align-items:center;gap:4px;padding:9px 0 0 4px;max-width:100%;box-sizing:border-box;pointer-events:none}#glide-fstitle[hidden]{display:none}' +
@@ -712,6 +714,66 @@
   // 길게 누르면 웹뷰가 띄우는 링크·이미지 메뉴(웹 느낌)를 막음
   // 입력칸(검색·댓글·추천 주제 검색)은 그대로: 막으면 붙여넣기·글자 선택이 안 됨 (전수조사 반영)
   document.addEventListener('contextmenu', function (e) { var t = e.target; if (t && t.closest && t.closest('input, textarea, [contenteditable=""], [contenteditable="true"]')) return; if (S().enabled && onYT()) e.preventDefault(); }, true);
+
+  // ---------------------------------------------------------------- 누른 순간 반응 (2026-11-20 사용자: "유튜브 앱은 누르면 바로 반응하는데 Glide는 둔탁")
+  // 안드로이드 앱(유튜브 앱)처럼: 손가락이 닿고 90ms 동안 거의 안 움직이면 그 항목 위에 옅은 누름 표시, 움직이면(스크롤) 바로 지움, 아주 빠른 탭은 뗄 때 잠깐 보임.
+  // 1.8.8에서 유튜브 웹의 누름 막(손 뗄 때·스크롤 뒤에도 깜빡임)을 숨긴 뒤로 누름 표시가 아예 없어 눌렀는지 모르는 둔한 느낌이었음.
+  // 유튜브 요소에는 class·position 을 붙이지 않고(목록 항목은 position static → 배치가 흔들릴 수 있음) 문서 위 고정 칸 하나를 항목 자리에 띄움
+  var PRESS_SEL = 'yt-lockup-view-model, ytm-video-with-context-renderer, ytm-compact-video-renderer, ytm-compact-playlist-renderer, ytm-playlist-renderer, ytm-compact-channel-renderer, .gr-card';
+  var PR = { el: null, item: null, timer: 0, hideTimer: 0, x: 0, y: 0, shown: false };
+  function prDark() {
+    if (typeof lastTheme === 'boolean') return lastTheme;
+    var m = document.body && /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(getComputedStyle(document.body).color);
+    return !!m && (+m[1] + +m[2] + +m[3]) / 3 > 128;
+  }
+  function prShow() {
+    PR.timer = 0;
+    var it = PR.item;
+    if (!it || !it.isConnected) return;
+    var r = it.getBoundingClientRect();
+    if (r.width < 40 || r.height < 30) return;
+    if (!PR.el || !PR.el.isConnected) { PR.el = G.el('div', { id: 'glide-press' }); (document.body || document.documentElement).appendChild(PR.el); }
+    if (PR.hideTimer) { G.clearTimeout.call(W, PR.hideTimer); PR.hideTimer = 0; }
+    PR.el.style.left = Math.round(r.left) + 'px'; PR.el.style.top = Math.round(r.top) + 'px';
+    PR.el.style.width = Math.round(r.width) + 'px'; PR.el.style.height = Math.round(r.height) + 'px';
+    PR.el.className = prDark() ? 'd' : '';
+    void PR.el.offsetWidth; // 나타나는 전환이 걸리게
+    PR.el.className += ' on';
+    PR.shown = true;
+  }
+  function prHide(delay) {
+    if (PR.timer) { G.clearTimeout.call(W, PR.timer); PR.timer = 0; }
+    PR.item = null;
+    if (!PR.shown) return;
+    PR.shown = false;
+    var el = PR.el;
+    if (PR.hideTimer) G.clearTimeout.call(W, PR.hideTimer);
+    PR.hideTimer = G.setTimeout.call(W, function () { PR.hideTimer = 0; if (el) el.className = el.className.replace(' on', ''); }, delay || 0);
+  }
+  document.addEventListener('touchstart', function (e) {
+    prHide(0);
+    if (e.touches.length !== 1 || !S().enabled || !onYT()) return;
+    var de = document.documentElement;
+    if (de.classList.contains('glide-full') || de.classList.contains('glide-pip')) return;
+    var t = e.target;
+    if (!t || !t.closest) return;
+    var it = t.closest(PRESS_SEL);
+    // 항목 안 버튼(⋮ 메뉴 등)·입력칸은 그 버튼의 누름 표시를 씀
+    if (!it || (t.closest('button, input, textarea, [role="button"], [role="slider"]') && it.contains(t.closest('button, input, textarea, [role="button"], [role="slider"]')))) return;
+    PR.item = it; PR.x = e.touches[0].clientX; PR.y = e.touches[0].clientY;
+    PR.timer = G.setTimeout.call(W, prShow, 90);
+  }, { capture: true, passive: true });
+  document.addEventListener('touchmove', function (e) {
+    if (!PR.item && !PR.shown) return;
+    var t = e.touches[0];
+    if (!t || Math.abs(t.clientX - PR.x) > 8 || Math.abs(t.clientY - PR.y) > 8) prHide(0);
+  }, { capture: true, passive: true });
+  document.addEventListener('touchend', function () {
+    if (PR.timer) { G.clearTimeout.call(W, PR.timer); prShow(); prHide(120); return; } // 아주 빠른 탭: 뗄 때 잠깐
+    prHide(60);
+  }, { capture: true, passive: true });
+  document.addEventListener('touchcancel', function () { prHide(0); }, { capture: true, passive: true });
+  W.addEventListener('scroll', function () { if (PR.shown || PR.timer) prHide(0); }, { capture: true, passive: true });
 
   // 스크롤을 막아야 하는 touchmove는 플레이어 상자에만 '막을 수 있는' 처리기로 붙임.
   // 문서 전체에 붙이면 페이지 어디서 스크롤하든 브라우저가 이 처리기를 기다려 스크롤 시작이 느려질 수 있음
@@ -1776,6 +1838,18 @@
     if (!/(^|\.)youtube\.com$/.test(u.hostname) || u.hostname === 'music.youtube.com') return null;
     return u;
   }
+  // 영상 열기 움직임(1.9.1, 유튜브 앱처럼 누른 썸네일 자리에서 영상 화면이 올라옴)용: 누른 항목의 썸네일 위치(CSS px)·제목
+  function openFrom(a) {
+    try {
+      var sel = typeof PRESS_SEL === 'string' ? PRESS_SEL : 'yt-lockup-view-model, ytm-video-with-context-renderer, ytm-compact-video-renderer, .gr-card';
+      var it = a.closest(sel) || a;
+      var th = it.querySelector('yt-thumbnail-view-model, .media-item-thumbnail-container, ytm-thumbnail-cover, .gr-thumb, img') || a;
+      var r = th.getBoundingClientRect();
+      if (r.width < 60 || r.height < 30 || r.bottom < 0 || r.top > innerHeight) return null;
+      var tt = it.querySelector('h3, h4, .media-item-headline, .gr-t, [role="heading"]');
+      return { rect: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)], iw: innerWidth, title: tt ? tt.textContent.replace(/\s+/g, ' ').trim().slice(0, 200) : '' };
+    } catch (e) { return null; }
+  }
   function stopAll(e) { e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); }
   // 링크 누름을 유튜브보다 먼저 봄 (window 캡처 단계)
   W.addEventListener('click', function (e) {
@@ -1795,8 +1869,8 @@
     var u = ytUrl(a.getAttribute('href'));
     if (!u || u.pathname === '/redirect') return;
     var lv = liveWatchUrl(u);
-    if (lv) { stopAll(e); if (r === 'browse') G.send('openVideo', { url: lv }); else navigateTo(lv); return; }
-    if (r === 'browse' && u.pathname === '/watch') { stopAll(e); G.send('openVideo', { url: u.href }); }
+    if (lv) { stopAll(e); if (r === 'browse') G.send('openVideo', { url: lv, from: openFrom(a) }); else navigateTo(lv); return; }
+    if (r === 'browse' && u.pathname === '/watch') { stopAll(e); G.send('openVideo', { url: u.href, from: openFrom(a) }); }
     else if (r === 'player' && u.pathname !== '/watch') { stopAll(e); G.send('openBrowse', { url: u.href }); }
   }, true);
 
