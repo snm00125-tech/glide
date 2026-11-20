@@ -17,7 +17,7 @@
 (function () {
   'use strict';
 
-  var CORE_VERSION = '1.9.1';
+  var CORE_VERSION = '1.9.2';
   var CORE_API = 1; // filters.json의 minCore와 비교
 
   var W = window;
@@ -1457,7 +1457,9 @@
   // ===========================================================================
   var START = { vid: null, t0: 0, reported: true, ad: false, waits: 0, timer: 0, stallLogged: false };
 
-  function isMainPlayer(p) { return !!p && (p.id === 'movie_player' || p.id === 'shorts-player'); }
+  // 모바일 유튜브는 홈·구독 피드의 소리 없는 미리보기에도 같은 #movie_player 를 옮겨 씀 → 앱에서는 본 영상 화면(/watch·쇼츠·뮤직)일 때만 본 플레이어.
+  // 1.9.1까지는 이름만 봐서 미리보기의 음소거·길이·배속이 본편 상태(광고 뒤 음량 되돌리기·채널 배속·이어보기·협찬 건너뛰기)로 섞일 수 있었음 (1.9.2 전체 점검)
+  function isMainPlayer(p) { return !!p && (p.id === 'movie_player' || p.id === 'shorts-player') && (PLATFORM !== 'android' || watchContext()); }
   function onWatchPage() { return location.pathname === '/watch'; }
   function urlVideoId() {
     try { return new URL(location.href).searchParams.get('v'); } catch (e) { return null; }
@@ -1575,6 +1577,9 @@
 
   function applyQuality(p) {
     if (!S.enabled || capturing()) return; // 저장 중에는 저장 기능이 화질을 정함
+    // 홈·구독 피드의 소리 없는 미리보기(같은 플레이어를 옮겨 씀)에는 화질을 걸지 않음: 미리보기에 1080p를 걸어 데이터를 더 쓰고,
+    // 피드 미리보기를 끈 상태에서는 유튜브가 0.7초마다 다시 붙일 때마다 또 걸었음 (1.9.2, 폰 로그 '[둘러보기] 화질 1080p로 설정')
+    if (typeof watchContext === 'function' && !watchContext()) return;
     var vid = currentVideoId(p);
     if (!vid) return;
     if (qualityListen && qualityListen !== vid) qualityListen = ''; // 다른 영상으로 넘어감

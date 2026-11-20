@@ -195,10 +195,15 @@
       '#glide-qsheet .qf{padding:8px 16px 14px;box-shadow:0 -1px 0 rgba(128,128,128,.16)}' +
       '#glide-qsheet .qc{all:unset;display:block;box-sizing:border-box;width:100%;padding:12px;border-radius:22px;text-align:center;font:500 15px/1.2 ' + QF + ';color:#cc0000;background:rgba(255,78,69,.1);cursor:pointer}#glide-qsheet.d .qc{color:#ff6b62}\n';
     // 다 본 영상 숨기기 (1.8.6, 설정 hideWatched): 썸네일 아래 빨간 진행 막대가 90% 넘은 항목을 홈·구독·영상 아래 추천 목록에서 숨김.
-    // 진행 막대는 aria-valuetext가 '95%'처럼 퍼센트 (실기 확인: yt-lockup-view-model 안 yt-progress-bar, '5%'). 플레이어의 탐색 막대는 시간 글자라 안 걸림.
+    // 진행 막대는 aria-valuetext가 '95%'처럼 퍼센트 (실기 확인: yt-lockup-view-model 안 yt-progress-bar, '5%').
     // 예전 배치(ytm-thumbnail-overlay-resume-playback-renderer)는 막대 너비로. 검색·채널·기록 화면은 그대로(html.glide-hw는 updateHideWatched가 붙임)
+    // **미리보기 플레이어 막대는 뺌** (1.9.2, 사용자 제보 '홈 영상들이 계속 깜빡임'): 유튜브는 홈 맨 위 영상에 소리 없는 미리보기 플레이어를
+    // 항목 안(#video-preview-portal > ytm-video-preview > yt-inline-player-controls > yt-progress-bar, role=slider)에 붙이는데, 그 막대도 같은 태그·퍼센트라
+    // 라이브 미리보기('100%')가 '다 본 영상'으로 잡혀 항목이 숨었다 나타나기를 0.7초마다 되풀이했음 (폰 CDP 기록: none:bar=100%:video ↔ inline-block)
     var HWP = [];
-    for (var hw = 90; hw <= 100; hw++) { HWP.push('[aria-valuetext="' + hw + '%"]'); HWP.push('.thumbnail-overlay-resume-playback-progress[style*="width: ' + hw + '"]'); }
+    // 다 본 영상 막대도 yt-progress-bar·role=slider 라 태그·역할로는 못 가름 → 미리보기 플레이어 칸 안인지로만
+    var HW_NOT = ':not(#video-preview-portal *, ytm-video-preview *, yt-inline-player-controls *, #movie_player *, ytm-inline-playback-renderer *)';
+    for (var hw = 90; hw <= 100; hw++) { HWP.push('[aria-valuetext="' + hw + '%"]' + HW_NOT); HWP.push('.thumbnail-overlay-resume-playback-progress[style*="width: ' + hw + '"]' + HW_NOT); }
     css += 'html.glide-hw :is(ytm-rich-item-renderer,ytm-video-with-context-renderer,ytm-compact-video-renderer,ytm-media-item,yt-lockup-view-model):has(:is(' + HWP.join(',') + ')){display:none!important}\n';
     css += 'h2.ytVideoMetadataViewModelTitle .ytAttributedStringHost{white-space:normal!important;line-height:inherit!important}' +
       // 유튜브가 제목 칸 높이를 45px로 고정해 둘째 줄 아래가 잘렸음(줄 높이 26px × 2 = 52px, 실기 확인) → 줄 높이를 유튜브 앱처럼 줄이고 높이는 2줄만큼
