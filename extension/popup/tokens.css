@@ -1,0 +1,87 @@
+/* 자동 생성 파일 — 직접 고치지 말고 core/ 를 고친 뒤 node tools/sync.mjs 실행 */
+:root {
+  --primary: #3047D6;
+  --on-primary: #FFFFFF;
+  --primary-container: #DEE0FF;
+  --on-primary-container: #00105B;
+  --secondary-container: #E1E2F9;
+  --on-secondary-container: #181B2C;
+  --tertiary: #586400;
+  --tertiary-container: #DDF46A;
+  --on-tertiary-container: #191E00;
+  --surface: #FAF8FF;
+  --surface-dim: #DAD9E3;
+  --surface-container-lowest: #FFFFFF;
+  --surface-container-low: #F4F2FC;
+  --surface-container: #EEEDF7;
+  --surface-container-high: #E8E7F1;
+  --surface-container-highest: #E3E1EC;
+  --on-surface: #1B1B21;
+  --on-surface-variant: #46464F;
+  --outline: #777680;
+  --outline-variant: #C7C5D0;
+  --error: #BA1A1A;
+  --error-container: #FFDAD6;
+  --on-error-container: #410002;
+  --success: #1E7B3E;
+  --scrim: #000000;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --primary: #DDF46A;
+    --on-primary: #2D3400;
+    --primary-container: #1A2BA8;
+    --on-primary-container: #DEE0FF;
+    --secondary-container: #2F3247;
+    --on-secondary-container: #E1E2F9;
+    --tertiary: #BAC3FF;
+    --tertiary-container: #2F4BF0;
+    --on-tertiary-container: #FFFFFF;
+    --surface: #121318;
+    --surface-dim: #121318;
+    --surface-container-lowest: #0D0E13;
+    --surface-container-low: #1B1B21;
+    --surface-container: #1F1F25;
+    --surface-container-high: #29292F;
+    --surface-container-highest: #34343A;
+    --on-surface: #E4E1E9;
+    --on-surface-variant: #C7C5D0;
+    --outline: #918F9A;
+    --outline-variant: #46464F;
+    --error: #FFB4AB;
+    --error-container: #93000A;
+    --on-error-container: #FFDAD6;
+    --success: #8BD9A0;
+    --scrim: #000000;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --primary: #DDF46A;
+  --on-primary: #2D3400;
+  --primary-container: #1A2BA8;
+  --on-primary-container: #DEE0FF;
+  --secondary-container: #2F3247;
+  --on-secondary-container: #E1E2F9;
+  --tertiary: #BAC3FF;
+  --tertiary-container: #2F4BF0;
+  --on-tertiary-container: #FFFFFF;
+  --surface: #121318;
+  --surface-dim: #121318;
+  --surface-container-lowest: #0D0E13;
+  --surface-container-low: #1B1B21;
+  --surface-container: #1F1F25;
+  --surface-container-high: #29292F;
+  --surface-container-highest: #34343A;
+  --on-surface: #E4E1E9;
+  --on-surface-variant: #C7C5D0;
+  --outline: #918F9A;
+  --outline-variant: #46464F;
+  --error: #FFB4AB;
+  --error-container: #93000A;
+  --on-error-container: #FFDAD6;
+  --success: #8BD9A0;
+  --scrim: #000000;
+  color-scheme: dark;
+}
