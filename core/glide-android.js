@@ -124,6 +124,8 @@
     // 목록 항목 눌림 표시 없앰 (1.8.8, 사용자: "유튜브 앱은 홈에서 스크롤해도 영상이 살짝씩 선택되는 모션이 없는데 Glide에는 있음").
     // 유튜브 웹은 손가락이 닿을 때와 뗄 때(스크롤 뒤에도) 항목 전체(썸네일+글, 바깥으로 12px)에 10% 회색 막을 띄우고 0.1~0.4초에 걸쳐 지움 (실기 측정)
     // → 스크롤할 때마다 썸네일이 깜빡여 버벅이는 듯 보였음. 링크 항목(구독·검색·영상 아래)은 안드로이드 기본 탭 강조색(파랑 40%)도 투명으로
+    // 탭 위치를 되살리는 동안 목록을 가림 (맨 위 → 보던 자리로 뛰는 모습이 안 보이게, 최대 4초)
+    css += 'html.glide-tabrestore ytm-browse{visibility:hidden!important}\n';
     css += '.ytLockupViewModelHost>yt-touch-feedback-shape{display:none!important}' +
       // 대신 Glide 누름 표시(아래 '누른 순간 반응'): 손가락이 머문 항목에만, 스크롤하면 바로 사라짐
       '#glide-press{position:fixed;z-index:3;pointer-events:none;border-radius:12px;opacity:0;background:rgba(0,0,0,.08);transition:opacity .15s ease-out}#glide-press.d{background:rgba(255,255,255,.13)}#glide-press.on{opacity:1;transition:opacity .05s ease-in}' +
@@ -2807,11 +2809,18 @@
     // 설정 창을 먼저 띄우지 않고 바로 영상 목록 (사용자 요청). 주제가 없어도 본 영상과 비슷한·트렌드·새 주제로 채우고, 설정은 위의 ⚙로
     recTheme();
     recLoad(false);
+    // 목록을 다시 받지 않았으면(30분 안) 닫기 전 위치로
+    if (REC.keepTop && !REC.loading && Date.now() - (REC.keepAt || 0) < 30 * 60e3) {
+      var kt = REC.keepTop;
+      W.requestAnimationFrame(function () { if (REC.open && REC.el) REC.el.scrollTop = kt; });
+    }
   }
   function recClose() {
     if (!REC.open) return;
     REC.open = false;
     recEditorClose();
+    // 다시 열 때 보던 자리로 (유튜브 앱처럼 탭마다 위치 유지, 2026-11-20 사용자 요청)
+    if (REC.el) { REC.keepTop = REC.el.scrollTop; REC.keepAt = Date.now(); }
     if (REC.el) REC.el.hidden = true;
     document.documentElement.classList.remove('glide-rec-open');
     if (REC.homeY && location.pathname + location.search === REC.path) W.scrollTo(0, REC.homeY);
@@ -3125,6 +3134,175 @@
     } catch (e) { /* ignore */ }
   }
   (function recLoop() { recTick(); G.setTimeout.call(W, recLoop, REC.open ? 700 : 1500); })();
+  // ---------------------------------------------------------------- 탭마다 보던 자리 기억 (2026-11-20 사용자: "홈에서 내렸다가 다른 탭에 갔다 다시 홈을 누르면 맨 위로 감 →
+  // 보던 화면으로. 홈을 한 번 더 누르면 맨 위로. 나머지 탭도 마찬가지" — 유튜브 앱과 같음)
+  // 모바일 유튜브 웹은 탭을 옮겼다 돌아오면 그 화면을 새로 그려 맨 위부터 몇 개만 보여 줌(같은 목록, 폰 CDP 확인), 같은 탭을 다시 누르면 목록을 새로 받으며 맨 위로.
+  // → 떠날 때 맨 위에 보이던 영상(ID·화면 위치)과 스크롤을 기억하고, 돌아오면 그 영상이 그려질 때까지 조용히 내려가 같은 자리에 맞춤(그동안 목록은 가림, 최대 4초).
+  //   지금 탭을 다시 누르면 새로고침 없이 부드럽게 맨 위로, 이미 맨 위면 유튜브 그대로(새로고침)
+  // 모바일 유튜브는 탭 이동 때 yt-navigate-finish 를 안 보내기도 해서(폰 확인) 주소가 바뀌는 것을 직접 지켜봄
+  var TABPOS = {};
+  // 탭 목록 보관: 모바일 유튜브는 탭을 다시 열면 목록(/youtubei/v1/browse)을 새로 받아 추천 순서가 바뀜(폰 확인 — 뒤로 가기도 같음).
+  // 그래서 보던 영상을 못 찾고 목록을 가린 채 기다렸음(사용자: "구독에서 홈으로 갈 때 로딩이 긺"). 둘러보기 웹뷰의 탭 목록 응답을 요청 내용(첫 묶음 browseId, 다음 묶음 continuation)별로
+  // 기억했다가, 탭을 눌러 옮긴 직후(TC.until)에만 같은 요청에 그대로 돌려줌 → 같은 목록이 바로 그려지고 보던 영상도 바로 찾음.
+  // 지금 탭을 맨 위에서 다시 누르거나(유튜브 새로고침) 당겨서 새로고침하면 새로 받음. 유튜브가 fetch 를 문서 시작 때 잡아 두므로 여기(문서 시작)에서 감쌈
+  var TC = { map: {}, keys: [], until: 0, initPath: location.pathname };
+  // 보관 목록·위치를 쓰는 시간: 10분 (사용자: 30분이면 홈이 갱신 안 될 수 있음 → 10분. 그 뒤에는 유튜브가 새 목록)
+  var TC_MS = 10 * 60e3;
+  // 앱을 켠 뒤 처음 그린 탭 목록은 요청이 아니라 페이지에 들어 있음(ytInitialData, 요청 응답과 같은 모양 — 폰 확인) → 그 탭을 처음 떠날 때 같은 열쇠로 보관.
+  // 안 하면 앱을 켜고 처음 탭을 오갈 때 유튜브가 홈을 새로 받아 순서가 바뀌어 보던 자리를 못 찾았음
+  var TC_INIT = { '/': 'FEwhat_to_watch', '/feed/subscriptions': 'FEsubscriptions' };
+  function tcSeedInitial(path) {
+    if (path !== TC.initPath || TC.seeded || !TC_INIT[path]) return;
+    TC.seeded = true;
+    var key = 'b:' + TC_INIT[path] + ':';
+    if (TC.map[key]) return;
+    try { var d = W.ytInitialData; if (d && typeof d === 'object' && d.contents) { var t = JSON.stringify(d); if (t.length < 5e6) { TC.map[key] = { text: t, t: Date.now() }; TC.keys.push(key); } } } catch (e) { /* ignore */ }
+  }
+  function tcKey(body) {
+    if (typeof body !== 'string' || body.length > 20000) return null;
+    var o; try { o = JSON.parse(body); } catch (e) { return null; }
+    if (!o || typeof o !== 'object') return null;
+    if (o.continuation) return 'c:' + o.continuation;
+    if (o.browseId && /^FE/.test(o.browseId)) return 'b:' + o.browseId + ':' + (o.params || '');
+    return null;
+  }
+  // 유튜브는 요청 내용을 gzip 으로 압축해 Uint8Array 로 보냄(폰 네트워크 기록: 1f 8b …) → 풀어서 읽음. 보내는 내용은 그대로
+  function tcBodyText(body) {
+    try {
+      if (typeof body === 'string') return Promise.resolve(body);
+      if (W.Blob && body instanceof W.Blob) return body.arrayBuffer().then(function (b) { return tcBodyText(new Uint8Array(b)); });
+      var u8 = body instanceof Uint8Array ? body : (body instanceof ArrayBuffer ? new Uint8Array(body) : null);
+      if (!u8 || u8.length > 200000) return Promise.resolve(null);
+      if (u8[0] === 0x1f && u8[1] === 0x8b) {
+        if (!W.DecompressionStream) return Promise.resolve(null);
+        return new W.Response(new W.Blob([u8]).stream().pipeThrough(new W.DecompressionStream('gzip'))).text();
+      }
+      return Promise.resolve(new TextDecoder().decode(u8));
+    } catch (e) { return Promise.resolve(null); }
+  }
+  (function () {
+    var prev = W.fetch;
+    if (typeof prev !== 'function') return;
+    var tcFetch = function fetch(input, init) {
+      var args = arguments;
+      try {
+        var url = typeof input === 'string' ? input : (input && input.url) || '';
+        // 유튜브는 fetch(new Request(주소, {method:'POST', body})) 로 부름(init 없음, 폰 진단) → Request 복사본에서 내용을 읽음 (원래 요청은 그대로 보냄)
+        var src = init && init.body ? Promise.resolve(init.body) : (W.Request && input instanceof W.Request && input.method === 'POST' ? input.clone().arrayBuffer().then(function (b) { return new Uint8Array(b); }) : null);
+        if (role() === 'browse' && url.indexOf('/youtubei/v1/browse') !== -1 && src) {
+          return src.then(tcBodyText).then(function (text) { return tcKey(text); }, function () { return null; }).then(function (key) {
+            var hit = key && TC.map[key], now = Date.now();
+            if (hit && now < TC.until && now - hit.t < TC_MS) {
+              log('info', '탭 목록: 보관한 목록으로 (' + key.slice(0, 2) + ')');
+              var nr = new W.Response(hit.text, { status: 200, headers: { 'content-type': 'application/json; charset=UTF-8' } });
+              try { Object.defineProperty(nr, 'url', { value: new URL(url, location.href).href }); } catch (e) { /* ignore */ }
+              return nr;
+            }
+            var pr = prev.apply(W, args);
+            if (key) pr.then(function (res) {
+              if (!res || !res.ok) return;
+              res.clone().text().then(function (t) {
+                if (!t || t.length > 5e6) return;
+                if (!TC.map[key]) { TC.keys.push(key); if (TC.keys.length > 40) delete TC.map[TC.keys.shift()]; }
+                TC.map[key] = { text: t, t: Date.now() };
+              }, function () {});
+            }, function () {});
+            return pr;
+          });
+        }
+      } catch (e) { /* 아래로 */ }
+      return prev.apply(W, args);
+    };
+    try { W.fetch = G.disguise ? G.disguise(tcFetch, prev) : tcFetch; } catch (e) { /* ignore */ }
+  })();
+  function tabKey() {
+    var p = location.pathname;
+    return role() === 'browse' && onYT() && (p === '/' || p.indexOf('/feed/') === 0) ? p : null;
+  }
+  function tabTop() { var h = document.querySelector('ytm-mobile-topbar-renderer'); return h ? Math.max(0, h.getBoundingClientRect().bottom) : 48; }
+  function tabAnchor() {
+    var top = tabTop() + 4;
+    var items = document.querySelectorAll('ytm-rich-item-renderer, ytm-video-with-context-renderer, ytm-compact-video-renderer, ytm-item-section-renderer ytm-compact-link-renderer');
+    for (var i = 0; i < items.length; i++) {
+      var r = items[i].getBoundingClientRect();
+      if (r.height < 40 || r.bottom <= top) continue;
+      var a = items[i].querySelector('a[href*="watch?v="]');
+      var m = a && /[?&]v=([\w-]{11})/.exec(a.getAttribute('href') || '');
+      if (m) return { id: m[1], off: r.top };
+    }
+    return null;
+  }
+  function tabFind(id) {
+    var as = document.querySelectorAll('a[href*="v=' + id + '"]');
+    for (var i = 0; i < as.length; i++) {
+      if (as[i].closest('ytm-video-preview, #video-preview-portal')) continue; // 미리보기 플레이어 안의 링크는 아님
+      var it = as[i].closest('ytm-rich-item-renderer, ytm-video-with-context-renderer, ytm-compact-video-renderer');
+      if (it && it.getBoundingClientRect().height > 0) return it;
+    }
+    return null;
+  }
+  var tabRestoring = 0;
+  function tabRestoreEnd() { tabRestoring = 0; document.documentElement.classList.remove('glide-tabrestore'); }
+  function tabRestore(st) {
+    var gen = ++tabRestoring, t0 = Date.now();
+    document.documentElement.classList.add('glide-tabrestore');
+    (function step() {
+      if (gen !== tabRestoring) return;
+      var it = st.id && tabFind(st.id);
+      if (it) {
+        W.scrollBy(0, it.getBoundingClientRect().top - st.off); tabRestoreEnd(); log('info', '탭 위치: 보던 자리로 (' + (Date.now() - t0) + 'ms)');
+        // 맞춘 뒤 유튜브가 위쪽을 더 그리면 밀려남 → 잠깐 뒤 다시 확인해 바로잡음 (사용자가 그사이 스크롤하면 그만)
+        var y0 = W.scrollY;
+        [300, 800, 1500].forEach(function (ms) { G.setTimeout.call(W, function () {
+          if (gen !== tabRestoring && tabRestoring !== 0) return;
+          if (Math.abs(W.scrollY - y0) > 4) return;
+          var again = tabFind(st.id);
+          if (again) { var d = again.getBoundingClientRect().top - st.off; if (Math.abs(d) > 24) { W.scrollBy(0, d); y0 = W.scrollY; } }
+        }, ms); });
+        return;
+      }
+      var max = document.documentElement.scrollHeight - innerHeight;
+      if (Date.now() - t0 > 2500) { if (st.y) W.scrollTo(0, Math.min(st.y, max)); tabRestoreEnd(); log('info', '탭 위치: 보던 영상을 못 찾아 스크롤 위치로'); return; }
+      // 목록이 아직 덜 그려졌으면 끝까지 내려 다음 묶음을 그리게 함 (보이지 않게 가린 채)
+      if (max > 0) W.scrollTo(0, Math.min(st.y || max, max));
+      G.setTimeout.call(W, step, 40); // 유튜브는 아래까지 내려야 다음 묶음을 그림 → 자주 내려 빨리 그리게
+    })();
+  }
+  var tabWatch = 0;
+  function tabWatchFrom(from) {
+    var gen = ++tabWatch, t0 = Date.now();
+    (function look() {
+      if (gen !== tabWatch || Date.now() - t0 > 6000) return;
+      var k = tabKey();
+      if (location.pathname !== from && k) {
+        var st = TABPOS[k];
+        if (st && Date.now() - st.t < TC_MS && (st.y > 50 || st.id)) { G.setTimeout.call(W, function () { tabRestore(st); }, 60); }
+        return;
+      }
+      G.setTimeout.call(W, look, 50);
+    })();
+  }
+  // window 캡처: 추천 화면 닫기(document 캡처)보다 먼저 봄 — 추천 화면이 열려 있으면 '같은 탭'이 아님
+  W.addEventListener('click', function (e) {
+    var t = e.target;
+    if (!t || !t.closest || role() !== 'browse' || !S().enabled || !onYT()) return;
+    var item = t.closest('ytm-pivot-bar-item-renderer');
+    if (!item) return;
+    var cur = tabKey();
+    var sel = item.querySelector('[aria-selected="true"]');
+    if (sel && !REC.open && cur) {
+      // 지금 탭을 다시 누름: 내려가 있으면 새로고침 없이 맨 위로, 이미 맨 위면 유튜브 그대로(새로고침)
+      delete TABPOS[cur];
+      if ((W.scrollY || 0) > 10) { stopAll(e); tabRestoreEnd(); W.scrollTo({ top: 0, behavior: 'smooth' }); }
+      else TC.until = 0; // 맨 위에서 다시 누름 = 유튜브 새로고침: 보관 목록을 쓰지 않음
+      return;
+    }
+    if (cur && !REC.open) { TABPOS[cur] = { y: W.scrollY || 0, t: Date.now(), id: (tabAnchor() || {}).id, off: (tabAnchor() || {}).off }; tcSeedInitial(cur); }
+    tabRestoreEnd();
+    TC.until = Date.now() + 8000; // 옮긴 탭의 목록(첫 묶음·보던 자리까지의 다음 묶음)은 보관한 것으로
+    tabWatchFrom(location.pathname);
+  }, true);
+
   // 홈·구독·내 페이지 탭, 상단 로고를 누르면 추천 화면을 닫음 (그 화면으로)
   document.addEventListener('click', function (e) {
     if (!REC.open || !e.target || !e.target.closest) return;

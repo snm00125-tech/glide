@@ -1,12 +1,11 @@
 {
-  "versionCode": 10902,
-  "versionName": "1.9.2",
-  "apk": "https://raw.githubusercontent.com/snm00125-tech/glide/main/apk/glide-1.9.2.apk",
-  "sha256": "2d2fa2405248b2866ade37df716153181189ffb664ee78ed7085207d07f2c5b6",
-  "size": 2930821,
+  "versionCode": 10903,
+  "versionName": "1.9.3",
+  "apk": "https://raw.githubusercontent.com/snm00125-tech/glide/main/apk/glide-1.9.3.apk",
+  "sha256": "06ac345b1d55285bba42f4bb9bbdac0d995f0ef4a57e679524d976c00714d087",
+  "size": 2934905,
   "notes": [
-    "홈 목록 맨 위 영상이 0.7초마다 사라졌다 나타나며 목록이 깜빡이던 것 ('다 본 영상 숨기기'가 유튜브의 소리 없는 미리보기 플레이어 진행 막대를 다 본 영상으로 잘못 읽었음)",
-    "홈 미리보기 플레이어를 본 영상으로 착각해 화질을 걸거나, 미리보기의 음소거·길이가 광고 뒤 음량 되돌리기·채널 배속·이어보기에 섞일 수 있던 것"
+    "홈·구독·내 페이지·추천 탭을 오가도 각 탭에서 보던 목록·자리 그대로 (유튜브 앱처럼, 10분 동안). 지금 탭을 한 번 더 누르면 맨 위로, 맨 위에서 한 번 더 누르면 새로고침"
   ],
   "date": "2026-11-20"
 }
