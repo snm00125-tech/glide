@@ -608,6 +608,65 @@
   }
 
   // ---------------------------------------------------------------------------
+  // 영상 아래쪽 띠를 좌우로 밀어 탐색 (2026-11-21, 사용자: 유튜브 앱은 영상 아래 끝에서 좌우로 밀면 위치가 자연스럽게 넘어감).
+  // 세로 화면(전체화면 아님)에서 플레이어 아래 48px 안에서 시작한 가로 밀기 → 손가락을 따라 시간 표시·막대가 움직이고, 손을 떼면 그 위치로.
+  // 플레이어 폭 전체 = 영상 길이 전체 (상대 이동). 조작부가 숨어 있어도 됨. 광고 중·전체화면은 제외(전체화면은 유튜브 진행 막대)
+  // ---------------------------------------------------------------------------
+  var SB = null, sbEl = null;
+  function sbFmt(t) { t = Math.max(0, Math.floor(t)); var h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, x = t % 60; return (h ? h + ':' + (m < 10 ? '0' : '') + m : m) + ':' + (x < 10 ? '0' : '') + x; }
+  function sbShow(r, t, d) {
+    if (!sbEl) {
+      sbEl = G.el('div', { id: 'glide-scrub', 'data-glide': 'scrub', style: 'position:fixed;z-index:2147483647;pointer-events:none' }, [
+        G.el('div', { style: 'position:absolute;left:50%;bottom:16px;transform:translateX(-50%);padding:6px 14px;border-radius:16px;background:rgba(0,0,0,.72);color:#fff;font:600 15px/1.2 Roboto,"Noto Sans KR",sans-serif;white-space:nowrap' }),
+        G.el('div', { style: 'position:absolute;left:0;right:0;bottom:0;height:4px;background:rgba(255,255,255,.35)' }, [G.el('div', { style: 'height:100%;background:#f03;width:0' })])
+      ]);
+    }
+    if (sbEl.parentNode !== document.body) document.body.appendChild(sbEl);
+    sbEl.style.left = r.left + 'px'; sbEl.style.width = r.width + 'px'; sbEl.style.top = (r.bottom - 80) + 'px'; sbEl.style.height = '80px';
+    sbEl.firstChild.textContent = sbFmt(t) + ' / ' + sbFmt(d);
+    sbEl.lastChild.firstChild.style.width = (d > 0 ? Math.min(100, t / d * 100) : 0) + '%';
+    sbEl.hidden = false;
+  }
+  document.addEventListener('touchstart', function (e) {
+    SB = null;
+    if (!S().enabled || !onWatch() || inFull() || LK.on || e.touches.length !== 1 || (S().role && role() !== 'player')) return;
+    var area = playerArea(), t = e.touches[0];
+    if (!area || !area.contains(e.target)) return;
+    var r = area.getBoundingClientRect();
+    if (r.height < 80 || t.clientY < r.bottom - 48 || t.clientY > r.bottom + 4) return;
+    var v = (mainPlayer() || document).querySelector('video');
+    if (!v || !isFinite(v.duration) || v.duration <= 0 || document.querySelector('#movie_player.ad-showing')) return;
+    SB = { x: t.clientX, y: t.clientY, t0: v.currentTime, d: v.duration, v: v, r: r, on: false, to: v.currentTime };
+  }, { capture: true, passive: true });
+  document.addEventListener('touchmove', function (e) {
+    if (!SB) return;
+    var t = e.touches[0], dx = t.clientX - SB.x, dy = t.clientY - SB.y;
+    if (!SB.on) {
+      if (Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx)) { SB = null; return; } // 세로 밀기는 원래 손동작(작게·전체화면)
+      if (Math.abs(dx) < 12) return;
+      SB.on = true; T = null; holdEnd(); G.send('haptic', { kind: 'gesture' });
+    }
+    // 움직임은 유튜브에도 넘김: 안 넘기면 유튜브가 '꾹 누르는 중'으로 보고 길게 눌러 2배속을 켰음(실기)
+    if (e.cancelable) e.preventDefault();
+    SB.to = Math.max(0, Math.min(SB.d - 0.5, SB.t0 + dx / SB.r.width * SB.d));
+    sbShow(SB.r, SB.to, SB.d);
+  }, { capture: true, passive: false });
+  document.addEventListener('touchend', function (e) {
+    var sb = SB; SB = null;
+    if (!sb || !sb.on) return;
+    // 손 뗌도 유튜브에 넘김 (길게 눌러 2배속이 켜졌다면 유튜브가 스스로 풀게)
+    try { sb.v.currentTime = sb.to; } catch (x) { /* ignore */ }
+    if (sbEl) G.setTimeout.call(W, function () { if (!SB && sbEl) sbEl.hidden = true; }, 350);
+    // 손을 뗄 때 생기는 클릭이 조작부를 켜고 끄지 않게
+    var until = Date.now() + 400;
+    var h = function (ev) { document.removeEventListener('click', h, true); if (Date.now() < until) { ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation(); } };
+    document.addEventListener('click', h, true);
+    G.setTimeout.call(W, function () { document.removeEventListener('click', h, true); }, 400);
+    log('info', '영상 아래 밀어 탐색: ' + sbFmt(sb.t0) + ' → ' + sbFmt(sb.to));
+  }, { capture: true, passive: false });
+  document.addEventListener('touchcancel', function () { SB = null; if (sbEl) sbEl.hidden = true; }, { capture: true, passive: true });
+
+  // ---------------------------------------------------------------------------
   // 두 번 탭 10초 이동 (유튜브 앱처럼 멈추지 않고).
   // 모바일 유튜브 웹은 두 번 탭 때 '일시정지 → 이동 → 0.6초 뒤 재생'을 해서 매번 끊겼음(실기, 받아 둔 구간 안이라 데이터 문제 아님).
   // 두 번째 탭부터는 Glide가 가로채서(유튜브는 첫 탭만 봄 = 조작부 표시) 재생을 멈추지 않고 currentTime만 옮김.
