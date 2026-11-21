@@ -61,6 +61,8 @@
   var LOGO = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 108 108'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%232F4BF0'/%3E%3Cstop offset='1' stop-color='%231A2BA8'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='108' height='108' rx='30' fill='url%28%23g%29'/%3E%3Cg fill='none' stroke-linecap='round' stroke-linejoin='round' stroke-width='12'%3E%3Cpath d='M30 32L50 54L30 76' stroke='%237D8FFF'/%3E%3Cpath d='M56 32L76 54L56 76' stroke='%23DDF46A'/%3E%3C/g%3E%3C/svg%3E";
   var LOCK_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='11' width='14' height='10' rx='2'/%3E%3Cpath d='M8 11V8a4 4 0 0 1 8 0v3'/%3E%3C/svg%3E";
   var SUN_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3Cpath d='M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4'/%3E%3C/svg%3E";
+  var ROT_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='7' y='3' width='10' height='18' rx='2'/%3E%3Cpath d='M3 12a9 9 0 0 1 3-6.7M21 12a9 9 0 0 1-3 6.7'/%3E%3Cpath d='M3 5v3h3M21 19v-3h-3'/%3E%3C/svg%3E";
+  var SPK_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 9h4l5-4v14l-5-4H4z'/%3E%3Cpath d='M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12'/%3E%3C/svg%3E";
   var style = document.createElement('style');
   style.setAttribute('data-glide', 'a');
   function updateStyle() {
@@ -72,13 +74,17 @@
     css += '#glide-gesture-hint{position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:2147483647;padding:7px 14px;border-radius:18px;background:rgba(0,0,0,.72);color:#fff;' +
       'font:600 13px/1.2 Pretendard,Roboto,system-ui,sans-serif;pointer-events:none;transition:opacity .15s}#glide-gesture-hint[hidden]{display:none}\n';
     // 전체화면 밝기 버튼(왼쪽 가운데)·세로 밝기 바 — 자물쇠 버튼이 있으면 그 위에
-    css += '#glide-bright-btn{all:unset;position:fixed;left:16px;top:50%;width:44px;height:44px;margin-top:-22px;border-radius:22px;z-index:2147483647;pointer-events:auto;cursor:pointer;' +
+    css += '#glide-bright-btn{all:unset;position:fixed;left:calc(16px + env(safe-area-inset-left,0px));top:50%;width:44px;height:44px;margin-top:-22px;border-radius:22px;z-index:2147483647;pointer-events:auto;cursor:pointer;' +
       'background:rgba(0,0,0,.55) url("' + SUN_ICON + '") center/22px 22px no-repeat;-webkit-tap-highlight-color:transparent}#glide-bright-btn.with-lock{margin-top:-78px}#glide-bright-btn[hidden]{display:none}\n';
-    css += '#glide-bright-bar{position:fixed;left:72px;top:50%;width:40px;height:150px;margin-top:-75px;border-radius:20px;z-index:2147483647;pointer-events:auto;touch-action:none;background:rgba(0,0,0,.55);overflow:hidden}' +
+    css += '#glide-bright-bar{position:fixed;left:calc(72px + env(safe-area-inset-left,0px));top:50%;width:40px;height:150px;margin-top:-75px;border-radius:20px;z-index:2147483647;pointer-events:auto;touch-action:none;background:rgba(0,0,0,.55);overflow:hidden}' +
       '#glide-bright-bar[hidden]{display:none}#glide-bright-bar>i{position:absolute;left:0;right:0;bottom:0;background:rgba(255,255,255,.9);pointer-events:none}' +
       '#glide-bright-bar>b{position:absolute;left:0;right:0;bottom:8px;height:20px;background:url("' + SUN_ICON + '") center/18px 18px no-repeat;filter:invert(.6);pointer-events:none}\n';
     css += '[data-glide-fb]{display:none!important}\n';
     css += 'html.glide-pip #glide-bright-btn,html.glide-pip #glide-bright-bar{display:none!important}\n';
+    // 전체화면 가로·세로 바꾸기 버튼 (오른쪽 가운데, 화면 가장자리 여백만큼 안쪽)
+    css += '#glide-rot-btn{all:unset;position:fixed;right:calc(16px + env(safe-area-inset-right,0px));top:50%;width:44px;height:44px;margin-top:-22px;border-radius:22px;z-index:2147483647;pointer-events:auto;cursor:pointer;' +
+      'background:rgba(0,0,0,.55) url("' + ROT_ICON + '") center/22px 22px no-repeat;-webkit-tap-highlight-color:transparent}#glide-rot-btn[hidden]{display:none}html.glide-pip #glide-rot-btn{display:none!important}\n';
+    css += '.glide-spk{display:block;width:24px;height:24px;background-color:currentColor;-webkit-mask:url("' + SPK_ICON + '") center/24px 24px no-repeat}\n';
     // 전체화면 화면 잠금 버튼·잠금 막(실수 터치 방지)
     css += '#glide-lock-btn{all:unset;position:fixed;left:16px;top:50%;width:44px;height:44px;margin-top:-22px;border-radius:22px;z-index:2147483647;pointer-events:auto;cursor:pointer;' +
       'background:rgba(0,0,0,.55) url("' + LOCK_ICON + '") center/22px 22px no-repeat;-webkit-tap-highlight-color:transparent}#glide-lock-btn[hidden]{display:none}\n';
@@ -381,12 +387,30 @@
   function updateBrBtn() {
     if (!inFull() || LK.on) {
       if (BR.btn) BR.btn.hidden = true; brClose();
+      if (ROT.btn) ROT.btn.hidden = true;
       if (!inFull() && BR.set) { BR.set = false; BR.v = -1; G.send('brightness', { v: -1 }); }
       return;
     }
     ensureBrEls();
     BR.btn.classList.toggle('with-lock', S().expLock === true);
     BR.btn.hidden = !controlsShown() && !BR.open;
+    rotUpdate();
+  }
+  // ===========================================================================
+  // 전체화면 가로·세로 바꾸기 (2026-11-21 사용자 요청): 오른쪽 가운데 버튼 → 앱이 화면 방향을 반대로 고정 (전체화면은 그대로).
+  // 폰을 실제로 그 방향으로 들면 고정이 풀려 다시 자동 회전 (앱 lockOrientation)
+  // ===========================================================================
+  var ROT = { btn: null };
+  function rotUpdate() {
+    if (!role() && !S().role) return; // 예전 앱(회전 명령 없음)
+    if (!ROT.btn) {
+      ROT.btn = G.el('button', { id: 'glide-rot-btn', type: 'button', 'aria-label': '가로·세로 바꾸기', 'data-glide': 'rot', hidden: '' });
+      ROT.btn.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); G.send('haptic', { kind: 'gesture' }); G.send('fullRotate', {}); log('info', '전체화면 가로·세로 바꾸기'); }, true);
+      ['touchstart', 'touchend', 'pointerdown', 'pointerup', 'mousedown', 'mouseup'].forEach(function (t) { ROT.btn.addEventListener(t, function (e) { e.stopPropagation(); }, true); });
+    }
+    var parent = lockParent();
+    if (ROT.btn.parentNode !== parent) parent.appendChild(ROT.btn);
+    ROT.btn.hidden = !inFull() || LK.on || !controlsShown();
   }
   G.onCommand('brightness', function (arg) { if (arg && typeof arg.v === 'number' && arg.v >= 0) { BR.v = arg.v; if (BR.open) brShow(arg.v); } });
   document.addEventListener('fullscreenchange', function () { if (!fullscreenEl()) document.documentElement.classList.remove('glide-zoom'); });
@@ -1991,6 +2015,42 @@
     }
   }
   (function hiLoop() { try { hiTick(); } catch (e) { /* ignore */ } G.setTimeout.call(W, hiLoop, 300); })();
+  // ===========================================================================
+  // 스피커 모드 (2026-11-21 사용자 요청): 전체화면 ⚙ 설정 메뉴(유튜브 player-settings-menu)에 '스피커 모드 (소리만)'.
+  // 누르면 앱이 작은 창 없이 뒤로 가고 소리만 계속 (PIP의 🎧와 같은 이어폰 모드). 알림을 누르면 돌아옴
+  // ===========================================================================
+  function spkTick() {
+    if (role() !== 'player' || !onWatch()) return;
+    var menu = document.querySelector('player-settings-menu');
+    if (!menu || menu.querySelector('#glide-spk') || !menu.getClientRects().length) return;
+    var rows = menu.querySelectorAll('yt-list-item-view-model');
+    if (!rows.length) return;
+    var tpl = null;
+    for (var i = 0; i < rows.length; i++) if (/^(속도|Playback speed)/.test((rows[i].textContent || '').trim())) { tpl = rows[i]; break; }
+    tpl = tpl || rows[rows.length - 1];
+    var c = tpl.cloneNode(true);
+    c.id = 'glide-spk';
+    var leaves = [].filter.call(c.querySelectorAll('*'), function (x) { return !x.children.length && (x.textContent || '').trim(); });
+    if (!leaves.length) return;
+    leaves[0].textContent = '스피커 모드';
+    for (var j = 1; j < leaves.length; j++) leaves[j].textContent = j === 1 ? '소리만' : '';
+    var ic = c.querySelector('c3-icon, yt-icon');
+    if (ic) { while (ic.firstChild) ic.removeChild(ic.firstChild); ic.appendChild(G.el('i', { 'class': 'glide-spk' })); }
+    [].forEach.call(c.querySelectorAll('[aria-label]'), function (x) { x.setAttribute('aria-label', '스피커 모드'); });
+    c.addEventListener('click', function (e) {
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      G.send('haptic', { kind: 'gesture' });
+      try { quCloseMenu(); } catch (x) { /* ignore */ }
+      G.send('audioOnly', {});
+      log('info', '스피커 모드: 소리만 계속 (전체화면 설정)');
+    }, true);
+    // 맨 위에: 첫 항목은 스위치 칸(switch-list-item-view-model) 안에 있으므로 메뉴 바로 아래 칸을 찾아 그 앞에
+    var first = rows[0];
+    while (first && first.parentNode !== tpl.parentNode) first = first.parentNode;
+    tpl.parentNode.insertBefore(c, first || tpl);
+  }
+  (function spkLoop() { try { spkTick(); } catch (e) { /* ignore */ } G.setTimeout.call(W, spkLoop, 300); })();
+
   // 라이브 공유 주소 /live/영상ID → /watch?v=영상ID. 유튜브도 연 뒤에 이렇게 바꾸지만, 그 전에 둘러보기 화면에서 열려 한 번 돌아 들어왔음
   function liveWatchUrl(u) {
     var m = /^\/live\/([\w-]{11})\/?$/.exec(u.pathname);
