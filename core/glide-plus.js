@@ -109,9 +109,11 @@
     compactRadioRenderer: 1, radioRenderer: 1, playlistRenderer: 1, compactPlaylistRenderer: 1,
     gridPlaylistRenderer: 1, movieRenderer: 1, compactMovieRenderer: 1
   };
-  var BL = { ids: {}, handles: {}, names: {}, keywords: [], any: false };
+  var BL = { ids: {}, handles: {}, names: {}, keywords: [], vids: {}, any: false };
   function compileBlock() {
-    BL = { ids: {}, handles: {}, names: {}, keywords: [], any: false };
+    BL = { ids: {}, handles: {}, names: {}, keywords: [], vids: {}, any: false };
+    // 영상 ⋮ 메뉴 '관심 없음'으로 고른 영상 (앱 목록 hiddenVideos)
+    (opt('hiddenVideos') || []).forEach(function (v) { if (/^[\w-]{11}$/.test(v)) { BL.vids[v] = 1; BL.any = true; } });
     P.blockItemKeys.forEach(function (k) { ITEM_KEYS[k] = 1; });
     (opt('blockChannels') || []).forEach(function (c) {
       c = String(c || '').trim();
@@ -159,6 +161,8 @@
     return out;
   }
   function blockedReason(body) {
+    var vid = body && (body.videoId || body.contentId);
+    if (vid && BL.vids[vid]) return '관심 없음';
     var c = collect(body), i;
     for (i = 0; i < c.ids.length; i++) if (BL.ids[c.ids[i]]) return '채널 ' + c.ids[i];
     for (i = 0; i < c.handles.length; i++) if (BL.handles[c.handles[i]]) return '채널 ' + c.handles[i].slice(1);
@@ -193,6 +197,46 @@
         }
       }
       if (removed) log('info', '차단 목록으로 ' + removed + '개 숨김 (' + src + '): ' + Object.keys(reasons).map(function (r) { return r + '×' + reasons[r]; }).join(', '));
+      return removed > 0;
+    }
+  });
+
+  // ===========================================================================
+  // 홈 피드의 커뮤니티 글 숨김 (2026-11-21, 사용자: 구독 안 한 채널의 커뮤니티 글 추천은 필요 없음)
+  //  홈(주소 '/')의 목록에서만 뺌 — 구독 탭·채널 페이지의 게시물은 그대로. 설정 hideHomePosts(기본 켬)
+  // ===========================================================================
+  var POST_KEYS = { backstagePostThreadRenderer: 1, backstagePostRenderer: 1, postRenderer: 1, sharedPostRenderer: 1, postThreadRenderer: 1 };
+  function isPostItem(it) {
+    var k = firstKey(it);
+    if (!k) return false;
+    if (POST_KEYS[k]) return true;
+    var c = it[k] && it[k].content;
+    if (k === 'richItemRenderer' && c) return !!POST_KEYS[firstKey(c)];
+    if (k === 'richSectionRenderer' && c) {
+      // 게시물만 모은 칸(최신 게시물 줄)
+      try { var str = G.stringify(c); return /"(backstagePostThreadRenderer|postRenderer|backstagePostRenderer)"/.test(str) && !/"(videoRenderer|lockupViewModel|videoWithContextRenderer|reelItemRenderer|shortsLockupViewModel)"/.test(str); } catch (e) { return false; }
+    }
+    return false;
+  }
+  G.addTransformer({
+    name: 'homePosts',
+    active: function () { return S.enabled && opt('hideHomePosts') !== false && location.pathname === '/' && G.mobileSite; },
+    run: function (root, src) {
+      if (src.indexOf('/next') !== -1 || src.indexOf('/player') !== -1) return false;
+      var removed = 0, stack = [root], visited = 0;
+      while (stack.length) {
+        var o = stack.pop();
+        if (++visited > 200000) break;
+        if (Array.isArray(o)) {
+          for (var i = o.length - 1; i >= 0; i--) {
+            var it = o[i];
+            if (!it || typeof it !== 'object') continue;
+            if (isPostItem(it)) { o.splice(i, 1); removed++; continue; }
+            stack.push(it);
+          }
+        } else for (var k in o) { var v = o[k]; if (v && typeof v === 'object') stack.push(v); }
+      }
+      if (removed) log('info', '홈 커뮤니티 글 ' + removed + '개 숨김 (' + src + ')');
       return removed > 0;
     }
   });
@@ -504,12 +548,13 @@
   function rsTitle(vid) { var m = G.videoMeta(vid); return (m && m.title) || (document.title || '').replace(/ - YouTube$/, ''); }
   function rsSameVideo(p) { var a = G.urlVideoId(), b = G.currentVideoId(p); return !a || !b || a === b; }
   function rsSave(p, v, force) {
-    if (!on('resume') || capturing() || !p || !v || !isFinite(v.duration) || v.duration < 60 || !rsSameVideo(p)) return;
+    // Glide 시청 기록(앱 history)도 같은 메시지로: 이어보기가 꺼져 있으면 historyOnly
+    if (!(on('resume') || S.history !== false) || capturing() || !p || !v || !isFinite(v.duration) || v.duration < 60 || !rsSameVideo(p)) return;
     var vid = videoIdOf(p), t = now();
     if (!force && t - RS.lastSent < 15000) return;
     if (!vid) return;
     RS.lastSent = t;
-    G.send('resume:save', { videoId: vid, t: Math.floor(v.currentTime), d: Math.floor(v.duration), title: rsTitle(vid) });
+    G.send('resume:save', { videoId: vid, t: Math.floor(v.currentTime), d: Math.floor(v.duration), title: rsTitle(vid), historyOnly: !on('resume') });
   }
   function rsAsk(p) {
     var vid = videoIdOf(p);

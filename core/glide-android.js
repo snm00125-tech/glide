@@ -60,6 +60,7 @@
   var BTN = 'glide-header-button', ANIM = 'glide-x-header';
   var LOGO = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 108 108'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%232F4BF0'/%3E%3Cstop offset='1' stop-color='%231A2BA8'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='108' height='108' rx='30' fill='url%28%23g%29'/%3E%3Cg fill='none' stroke-linecap='round' stroke-linejoin='round' stroke-width='12'%3E%3Cpath d='M30 32L50 54L30 76' stroke='%237D8FFF'/%3E%3Cpath d='M56 32L76 54L56 76' stroke='%23DDF46A'/%3E%3C/g%3E%3C/svg%3E";
   var LOCK_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='11' width='14' height='10' rx='2'/%3E%3Cpath d='M8 11V8a4 4 0 0 1 8 0v3'/%3E%3C/svg%3E";
+  var SUN_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3Cpath d='M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4'/%3E%3C/svg%3E";
   var style = document.createElement('style');
   style.setAttribute('data-glide', 'a');
   function updateStyle() {
@@ -70,6 +71,14 @@
       'background:url("' + LOGO + '") center/26px 26px no-repeat}' + '#' + BTN + ':active{background-color:rgba(127,127,127,.2)}\n';
     css += '#glide-gesture-hint{position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:2147483647;padding:7px 14px;border-radius:18px;background:rgba(0,0,0,.72);color:#fff;' +
       'font:600 13px/1.2 Pretendard,Roboto,system-ui,sans-serif;pointer-events:none;transition:opacity .15s}#glide-gesture-hint[hidden]{display:none}\n';
+    // 전체화면 밝기 버튼(왼쪽 가운데)·세로 밝기 바 — 자물쇠 버튼이 있으면 그 위에
+    css += '#glide-bright-btn{all:unset;position:fixed;left:16px;top:50%;width:44px;height:44px;margin-top:-22px;border-radius:22px;z-index:2147483647;pointer-events:auto;cursor:pointer;' +
+      'background:rgba(0,0,0,.55) url("' + SUN_ICON + '") center/22px 22px no-repeat;-webkit-tap-highlight-color:transparent}#glide-bright-btn.with-lock{margin-top:-78px}#glide-bright-btn[hidden]{display:none}\n';
+    css += '#glide-bright-bar{position:fixed;left:72px;top:50%;width:40px;height:150px;margin-top:-75px;border-radius:20px;z-index:2147483647;pointer-events:auto;touch-action:none;background:rgba(0,0,0,.55);overflow:hidden}' +
+      '#glide-bright-bar[hidden]{display:none}#glide-bright-bar>i{position:absolute;left:0;right:0;bottom:0;background:rgba(255,255,255,.9);pointer-events:none}' +
+      '#glide-bright-bar>b{position:absolute;left:0;right:0;bottom:8px;height:20px;background:url("' + SUN_ICON + '") center/18px 18px no-repeat;filter:invert(.6);pointer-events:none}\n';
+    css += '[data-glide-fb]{display:none!important}\n';
+    css += 'html.glide-pip #glide-bright-btn,html.glide-pip #glide-bright-bar{display:none!important}\n';
     // 전체화면 화면 잠금 버튼·잠금 막(실수 터치 방지)
     css += '#glide-lock-btn{all:unset;position:fixed;left:16px;top:50%;width:44px;height:44px;margin-top:-22px;border-radius:22px;z-index:2147483647;pointer-events:auto;cursor:pointer;' +
       'background:rgba(0,0,0,.55) url("' + LOCK_ICON + '") center/22px 22px no-repeat;-webkit-tap-highlight-color:transparent}#glide-lock-btn[hidden]{display:none}\n';
@@ -334,6 +343,52 @@
     reportFull();
   }
   if (document.body) watchFaux(); else document.addEventListener('DOMContentLoaded', watchFaux, { once: true });
+
+  // ===========================================================================
+  // 전체화면 밝기 (Glide만의 기능, 유튜브 앱엔 없음): 조작 버튼이 보일 때 왼쪽 가운데에 밝기 버튼.
+  // 누르면 세로 밝기 바가 뜨고, 그 바 위에서만 위아래로 밀어 조절 (화면 위아래 손동작과 겹치지 않게).
+  // 앱 창의 밝기만 바꾸고(폰 설정은 그대로), 전체화면을 나가면 원래 밝기로 돌아감
+  // ===========================================================================
+  var BR = { btn: null, bar: null, fill: null, v: -1, open: false, timer: 0, set: false };
+  function brShow(v) { if (BR.fill) BR.fill.style.height = Math.round(Math.max(0, Math.min(1, v)) * 100) + '%'; }
+  function brArm() { if (BR.timer) G.clearTimeout.call(W, BR.timer); BR.timer = G.setTimeout.call(W, function () { brClose(); }, 2500); }
+  function brClose() { BR.open = false; if (BR.bar) BR.bar.hidden = true; if (BR.timer) { G.clearTimeout.call(W, BR.timer); BR.timer = 0; } }
+  function brFromY(y) {
+    var r = BR.bar.getBoundingClientRect(); if (!r.height) return;
+    var v = Math.max(0.01, Math.min(1, (r.bottom - y) / r.height));
+    BR.v = v; BR.set = true; brShow(v); G.send('brightness', { v: v }); brArm();
+  }
+  function ensureBrEls() {
+    if (!BR.btn) {
+      BR.btn = G.el('button', { id: 'glide-bright-btn', type: 'button', 'aria-label': '밝기', 'data-glide': 'bright', hidden: '' });
+      BR.bar = G.el('div', { id: 'glide-bright-bar', 'data-glide': 'bright', role: 'slider', 'aria-label': '밝기', hidden: '' }, [G.el('i'), G.el('b')]);
+      BR.fill = BR.bar.firstChild;
+      var stop = function (e) { e.stopPropagation(); };
+      BR.btn.addEventListener('click', function (e) {
+        e.preventDefault(); e.stopPropagation();
+        if (BR.open) { brClose(); return; }
+        BR.open = true; BR.bar.hidden = false; brShow(BR.v < 0 ? 0.5 : BR.v); G.send('brightness', { v: -2 }); brArm();
+      }, true);
+      ['touchstart', 'touchmove'].forEach(function (t) {
+        BR.bar.addEventListener(t, function (e) { e.preventDefault(); e.stopPropagation(); var p = e.touches && e.touches[0]; if (p) brFromY(p.clientY); }, { capture: true, passive: false });
+      });
+      ['touchend', 'click', 'pointerdown', 'pointerup', 'mousedown', 'mouseup'].forEach(function (t) { BR.bar.addEventListener(t, stop, true); BR.btn.addEventListener(t, stop, true); });
+    }
+    var parent = lockParent();
+    if (BR.btn.parentNode !== parent) parent.appendChild(BR.btn);
+    if (BR.bar.parentNode !== parent) parent.appendChild(BR.bar);
+  }
+  function updateBrBtn() {
+    if (!inFull() || LK.on) {
+      if (BR.btn) BR.btn.hidden = true; brClose();
+      if (!inFull() && BR.set) { BR.set = false; BR.v = -1; G.send('brightness', { v: -1 }); }
+      return;
+    }
+    ensureBrEls();
+    BR.btn.classList.toggle('with-lock', S().expLock === true);
+    BR.btn.hidden = !controlsShown() && !BR.open;
+  }
+  G.onCommand('brightness', function (arg) { if (arg && typeof arg.v === 'number' && arg.v >= 0) { BR.v = arg.v; if (BR.open) brShow(arg.v); } });
   document.addEventListener('fullscreenchange', function () { if (!fullscreenEl()) document.documentElement.classList.remove('glide-zoom'); });
 
   // 유튜브 전체화면 조작부 (1.8.9): Glide 손동작·회전 전체화면(html.glide-full)에서도 유튜브가 '전체화면'으로 알게 해서
@@ -975,12 +1030,12 @@
     var o = document.getElementById('player-control-overlay');
     if (!o || (LK.ctlObs && LK.ctlObs.target === o) || typeof MutationObserver !== 'function') return;
     if (LK.ctlObs) LK.ctlObs.disconnect();
-    LK.ctlObs = new MutationObserver(updateLockBtn);
+    LK.ctlObs = new MutationObserver(function () { updateLockBtn(); updateBrBtn(); });
     LK.ctlObs.observe(o, { attributes: true, attributeFilter: ['class'] });
     LK.ctlObs.target = o;
   }
-  document.addEventListener('fullscreenchange', function () { watchControls(); G.setTimeout.call(W, updateLockBtn, 50); });
-  W.addEventListener('glide:fullstate', function () { watchControls(); updateLockBtn(); });
+  document.addEventListener('fullscreenchange', function () { watchControls(); G.setTimeout.call(W, function () { updateLockBtn(); updateBrBtn(); }, 50); });
+  W.addEventListener('glide:fullstate', function () { watchControls(); updateLockBtn(); updateBrBtn(); });
 
   // ===========================================================================
   // 오프라인 저장: 앱이 이 영상을 '저장 표시(glide_save)'를 붙여 다시 열면, 플레이어가 재생하려고 받는 영상·소리 데이터를
@@ -1881,6 +1936,61 @@
     else if (r === 'player' && u.pathname !== '/watch') { stopAll(e); G.send('openBrowse', { url: u.href }); }
   }, true);
 
+  // ===========================================================================
+  // 시청 기록은 지문 뒤로 (2026-11-21, 사용자: "기록은 계속 저장되되, 개인정보니까 내 지문이 있어야만 볼 수 있게").
+  // 유튜브 계정 기록은 사용자가 꺼 둠(10월 27일까지만 있음) → 기록은 Glide가 이 폰에 남기고(HistoryActivity), 유튜브의 기록 입구는 그리로 보냄:
+  //  - '내 페이지'의 기록 칸(썸네일이 그대로 보여 남이 볼 수 있음)은 숨기고 그 자리에 '시청 기록 · 지문으로 열기' 줄
+  //  - 기록 링크(/feed/history)를 누르거나 그 주소로 가면 → 앱이 지문 확인 뒤 Glide 시청 기록
+  // ===========================================================================
+  var HI = { at: 0, row: null };
+  function hiOpen(why) {
+    if (Date.now() - HI.at < 1500) return;
+    HI.at = Date.now();
+    G.send('openHistory', {});
+    log('info', '시청 기록 → Glide 시청 기록(지문) · ' + why);
+  }
+  W.addEventListener('click', function (e) {
+    if (role() !== 'browse' || !onYT() || !e.target || !e.target.closest) return;
+    if (e.target.closest('#glide-hist-row')) { stopAll(e); hiOpen('내 페이지 줄'); return; }
+    var a = e.target.closest('a[href]');
+    var u = a && ytUrl(a.getAttribute('href'));
+    if (u && /^\/feed\/history/.test(u.pathname)) { stopAll(e); hiOpen('기록 링크'); }
+  }, true);
+  function hiSection(link) {
+    // 기록 링크에서 위로: 영상 링크를 품은 가장 가까운 칸 (내 페이지의 '기록' 가로 줄)
+    var el = link;
+    for (var i = 0; i < 8 && el && el.parentElement && el.parentElement !== document.body; i++) {
+      el = el.parentElement;
+      if (el.querySelector('a[href*="watch?v="], a[href*="/shorts/"]')) return el;
+    }
+    return null;
+  }
+  function hiTick() {
+    if (role() !== 'browse' || !onYT()) return;
+    var p = location.pathname;
+    if (/^\/feed\/history/.test(p)) {
+      // 링크가 아닌 길(유튜브 버튼·주소)로 들어온 경우: 유튜브 기록 화면을 보이지 않고 되돌린 뒤 Glide 기록을 엶
+      document.documentElement.classList.add('glide-hist-away');
+      if (history.length > 1) history.back(); else location.replace(location.origin + '/');
+      hiOpen('기록 주소');
+      return;
+    }
+    document.documentElement.classList.remove('glide-hist-away');
+    if (!/^\/feed\/(you|library)/.test(p)) return;
+    var links = document.querySelectorAll('a[href^="/feed/history"]');
+    for (var i = 0; i < links.length; i++) {
+      var sec = hiSection(links[i]);
+      if (!sec || sec.getAttribute('data-glide-fb')) continue;
+      sec.setAttribute('data-glide-fb', '1'); // 숨김 (관심 없음과 같은 표시)
+      if (!HI.row || !HI.row.isConnected) {
+        HI.row = G.el('button', { id: 'glide-hist-row', type: 'button', 'data-glide': 'hist', style: 'all:unset;box-sizing:border-box;display:flex;align-items:center;gap:12px;width:calc(100% - 24px);margin:8px 12px;padding:14px 16px;border-radius:12px;' +
+          'background:var(--yt-spec-badge-chip-background,rgba(127,127,127,.12));color:inherit;font:500 15px/1.3 Roboto,"Noto Sans KR",sans-serif;cursor:pointer;pointer-events:auto' },
+          [G.el('span', { text: '🔒', style: 'font-size:18px' }), G.el('span', { text: '시청 기록', style: 'flex:1;font-weight:600' }), G.el('span', { text: '지문으로 열기 ›', style: 'opacity:.7;font-size:13px' })]);
+      }
+      sec.parentNode.insertBefore(HI.row, sec);
+    }
+  }
+  (function hiLoop() { try { hiTick(); } catch (e) { /* ignore */ } G.setTimeout.call(W, hiLoop, 300); })();
   // 라이브 공유 주소 /live/영상ID → /watch?v=영상ID. 유튜브도 연 뒤에 이렇게 바꾸지만, 그 전에 둘러보기 화면에서 열려 한 번 돌아 들어왔음
   function liveWatchUrl(u) {
     var m = /^\/live\/([\w-]{11})\/?$/.exec(u.pathname);
@@ -2237,7 +2347,8 @@
     return {
       id: m[1],
       title: ((t && t.textContent) || a.getAttribute('aria-label') || '').trim().replace(/\s+/g, ' ').slice(0, 150),
-      ch: ((meta && meta.textContent) || '').trim().slice(0, 60)
+      ch: ((meta && meta.textContent) || '').trim().slice(0, 60),
+      ch2: fbChannel(item)
     };
   }
   // ⋮ 버튼(길게 누르기도 이것을 누름)을 누른 항목을 기억하고, 뜨는 메뉴에 '다음에 재생'을 넣음
@@ -2257,7 +2368,7 @@
     var list = null, hosts = document.querySelectorAll('bottom-sheet-container yt-sheet-view-model, .ytSpecBottomSheetLayoutHost, .menu-container .menu-content');
     for (var i = hosts.length - 1; i >= 0 && !list; i--) if (hosts[i].getBoundingClientRect().height > 40 && hosts[i].querySelector(QU_MI)) list = hosts[i];
     if (!list) { G.setTimeout.call(W, function () { quWaitMenu(n + 1); }, 80); return; }
-    if (list.querySelector('#glide-qnext')) return;
+    if (list.querySelector('#glide-qnext')) { try { fbMenu(list, QU.menuFor, list.querySelector('#glide-qnext')); } catch (x) { /* ignore */ } return; }
     var tpl = list.querySelector(QU_MI);
     var c = tpl.cloneNode(true);
     c.id = 'glide-qnext';
@@ -2281,6 +2392,7 @@
       quCloseMenu();
     }, true);
     tpl.parentNode.insertBefore(c, tpl);
+    try { fbMenu(list, QU.menuFor, tpl); } catch (x) { /* ignore */ }
   }
   function quCloseMenu() {
     // 가운데 뜨는 메뉴는 '취소' 항목으로 닫음
@@ -2290,6 +2402,122 @@
     var sc = document.querySelector('ytw-scrim button, ytw-scrim');
     if (sc) sc.click();
     else document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+  }
+  // ===========================================================================
+  // 관심 없음 · 채널 차단 (2026-11-21, 사용자: "채널 차단, 관심 없음도 잘 만들어줘")
+  //  - 영상 ⋮ 메뉴의 유튜브 '관심 없음'·'채널 추천 안함'은 유튜브 것대로 계정에 알리고(알고리즘), Glide가 그 자리에서 바로 항목을 치움
+  //    (유튜브 웹은 항목 자리에 안내 카드만 남김). 메뉴에 그 항목이 없으면(로그아웃·다른 모양 메뉴) Glide 항목을 넣음
+  //  - 앱이 목록(hiddenVideos·blockChannels)에 저장 → 다음 목록부터 데이터 단계(glide-plus 'block')에서 빠지고, 이미 그려진 것은 훑어서 숨김
+  //  - 아래 알림의 '실행 취소'는 Glide 목록에서만 되돌림
+  //  - 홈 피드의 커뮤니티 글(구독 안 한 채널 글 추천)도 여기서 숨김 (데이터 단계는 glide-plus 'homePosts')
+  // ===========================================================================
+  var FB = { info: null, toast: null, timer: 0, sweepAt: 0 };
+  var FB_POSTS = 'ytm-backstage-post-thread-renderer, ytm-backstage-post-renderer, ytm-post-renderer, ytm-shared-post-renderer';
+  function fbChannel(item) {
+    if (!item) return null;
+    var a = item.querySelector('a[href^="/@"], a[href^="/channel/UC"]');
+    var href = a ? (a.getAttribute('href') || '') : '';
+    var key = '';
+    var m = /^\/(@[^/?#]+)/.exec(href);
+    if (m) { try { key = decodeURIComponent(m[1]); } catch (e) { key = m[1]; } }
+    else if ((m = /^\/channel\/(UC[\w-]{20,})/.exec(href))) key = m[1];
+    var row = item.querySelector('.ytContentMetadataViewModelMetadataRow, .media-item-byline, .ytm-badge-and-byline-item-byline');
+    var name = row ? (row.textContent || '').split(/[•·]/)[0].replace(/\s+/g, ' ').trim() : '';
+    if (!key && !name) return null;
+    return { key: key || name, name: name || key };
+  }
+  function fbBox(item) { return (item.closest && item.closest('ytm-rich-item-renderer, ytm-video-with-context-renderer, ytm-compact-video-renderer')) || item; }
+  function fbItems() { return document.querySelectorAll('yt-lockup-view-model, ytm-video-with-context-renderer, ytm-compact-video-renderer, ytm-media-item'); }
+  function fbHide(box, on) { if (on) box.setAttribute('data-glide-fb', '1'); else box.removeAttribute('data-glide-fb'); }
+  function fbVid(item) { var a = item.querySelector('a[href*="watch?v="]'); var m = a && /[?&]v=([\w-]{11})/.exec(a.getAttribute('href') || ''); return m ? m[1] : ''; }
+  // 이미 그려진 목록에서 숨길 것 숨기기 (목록·탭 보관본은 데이터 단계를 거치지 않았을 수 있음)
+  function fbSweep() {
+    var s = S();
+    if (!s.enabled || !onYT()) return;
+    var vids = {}, chs = {};
+    (s.hiddenVideos || []).forEach(function (v) { vids[v] = 1; });
+    (s.blockChannels || []).forEach(function (c) { c = String(c || '').trim().toLowerCase(); if (c) chs[c] = 1; });
+    var anyList = Object.keys(vids).length || Object.keys(chs).length;
+    if (anyList) [].forEach.call(fbItems(), function (it) {
+      var box = fbBox(it);
+      if (box.getAttribute('data-glide-fb')) return;
+      var v = fbVid(it);
+      var ch = fbChannel(it);
+      if ((v && vids[v]) || (ch && (chs[ch.key.toLowerCase()] || chs[ch.name.toLowerCase()]))) fbHide(box, true);
+    });
+    // 홈 피드 커뮤니티 글
+    if (s.hideHomePosts !== false && location.pathname === '/' && G.mobileSite) [].forEach.call(document.querySelectorAll(FB_POSTS), function (p) {
+      var box = p.closest('ytm-rich-item-renderer, ytm-rich-section-renderer') || p;
+      if (!box.getAttribute('data-glide-fb')) fbHide(box, true);
+    });
+  }
+  (function fbLoop() { try { fbSweep(); } catch (e) { /* ignore */ } G.setTimeout.call(W, fbLoop, 700); })();
+  function fbToast(text, undo) {
+    if (FB.toast && FB.toast.isConnected) FB.toast.remove();
+    var btn = G.el('button', { type: 'button', text: '실행 취소', style: 'all:unset;color:#3ea6ff;font-weight:600;padding:4px 2px;cursor:pointer' });
+    FB.toast = G.el('div', { id: 'glide-fbtoast', 'data-glide': 'fb', style: 'position:fixed;left:12px;right:12px;bottom:72px;z-index:2147483647;display:flex;align-items:center;justify-content:space-between;gap:12px;' +
+      'padding:12px 16px;border-radius:10px;background:#323232;color:#fff;font:400 14px/1.35 Roboto,"Noto Sans KR",sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.3);pointer-events:auto' },
+      [G.el('span', { text: text }), btn]);
+    btn.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); if (FB.toast) FB.toast.remove(); undo(); }, true);
+    (document.body || document.documentElement).appendChild(FB.toast);
+    if (FB.timer) G.clearTimeout.call(W, FB.timer);
+    FB.timer = G.setTimeout.call(W, function () { if (FB.toast) FB.toast.remove(); }, 5000);
+  }
+  function fbAct(kind, info) {
+    if (!info) return;
+    G.send('haptic', { kind: 'gesture' });
+    var boxes = [];
+    if (kind === 'video') {
+      [].forEach.call(fbItems(), function (it) { if (fbVid(it) === info.id) boxes.push(fbBox(it)); });
+      G.send('blockAdd', { kind: 'video', value: info.id, label: info.title || '' });
+      boxes.forEach(function (b) { fbHide(b, true); });
+      log('info', '관심 없음 [' + info.id + '] ' + (info.title || '').slice(0, 40));
+      fbToast('관심 없음으로 표시했어요', function () { G.send('blockRemove', { kind: 'video', value: info.id }); boxes.forEach(function (b) { fbHide(b, false); }); });
+    } else {
+      var ch = info.ch2;
+      if (!ch) return;
+      [].forEach.call(fbItems(), function (it) { var c = fbChannel(it); if (c && (c.key === ch.key || c.name === ch.name)) boxes.push(fbBox(it)); });
+      G.send('blockAdd', { kind: 'channel', value: ch.key, label: ch.name });
+      boxes.forEach(function (b) { fbHide(b, true); });
+      log('info', '채널 차단 ' + ch.key + ' (' + ch.name + ')');
+      fbToast('\'' + ch.name + '\' 채널을 차단했어요', function () { G.send('blockRemove', { kind: 'channel', value: ch.key }); boxes.forEach(function (b) { fbHide(b, false); }); });
+    }
+  }
+  // 메뉴가 뜨면(quWaitMenu가 찾은 목록): 유튜브 항목에 Glide 동작을 붙이거나, 없으면 Glide 항목을 넣음
+  function fbMenu(list, info, tpl) {
+    FB.info = info;
+    var items = [].slice.call(list.querySelectorAll(QU_MI));
+    var find = function (re) { return items.filter(function (x) { return re.test((x.textContent || '').replace(/\s+/g, ' ').trim()); })[0]; };
+    [['video', /^관심 없음$|^Not interested$/, '관심 없음'], ['channel', /^채널 추천 안함$|^Don.t recommend channel$/, '이 채널 차단']].forEach(function (d) {
+      if (d[0] === 'channel' && !(info && info.ch2)) return;
+      var own = find(d[1]);
+      if (own) {
+        if (!own._glideFb) {
+          own._glideFb = d[0];
+          // 유튜브 동작은 그대로 두고(계정에 알림), 누르는 순간의 영상으로 Glide 쪽도
+          own.addEventListener('click', function () { var i = FB.info; FB.info = null; if (i) G.setTimeout.call(W, function () { fbAct(own._glideFb, i); }, 0); }, true);
+        }
+        return;
+      }
+      var id = 'glide-fb-' + d[0];
+      if (list.querySelector('#' + id)) return;
+      var c = tpl.cloneNode(true);
+      c.id = id;
+      var leaf = null;
+      [].some.call(c.querySelectorAll('*'), function (x) { if (!x.children.length && (x.textContent || '').trim()) { leaf = x; return true; } return false; });
+      if (!leaf) return;
+      leaf.textContent = d[2];
+      var ic = c.querySelector('c3-icon, yt-icon');
+      if (ic) while (ic.firstChild) ic.removeChild(ic.firstChild);
+      [].forEach.call(c.querySelectorAll('[aria-label]'), function (x) { x.setAttribute('aria-label', d[2]); });
+      c.addEventListener('click', function (e) {
+        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+        var i = FB.info; FB.info = null;
+        quCloseMenu();
+        fbAct(d[0], i);
+      }, true);
+      tpl.parentNode.appendChild(c);
+    });
   }
   // 앱이 대기열을 알려 줌 (영상 웹뷰). hold: 수면 타이머 '영상 끝나면 정지' 중 (넘기지 않음)
   G.onCommand('queue', function (arg) {
