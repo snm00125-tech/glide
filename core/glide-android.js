@@ -30,7 +30,7 @@
       longPressItems: a.longPressItems || ['ytm-rich-item-renderer', 'ytm-video-with-context-renderer', 'ytm-compact-video-renderer', 'ytm-shorts-lockup-view-model', 'ytm-shorts-lockup-view-model-v2', 'ytm-playlist-renderer', 'ytm-compact-playlist-renderer'],
       itemMenuButtons: a.itemMenuButtons || ['button[aria-label="추가 작업"]', 'button[aria-label="More actions"]', 'button[aria-label="Action menu"]', 'ytm-menu-renderer button'],
       longPressMs: a.longPressMs || 480,
-      pullBlockers: a.pullBlockers || ["ytm-engagement-panel", "bottom-sheet-container", "yt-sheet-view-model", "ytm-bottom-sheet-renderer", "dialog[open]", "tp-yt-paper-dialog", "ytm-search[open]", ".mobile-topbar-header[data-mode=searching]"],
+      pullBlockers: a.pullBlockers || [".ytSpecBottomSheetLayoutHost", ".menu-container .menu-content", "ytm-engagement-panel", "bottom-sheet-container", "yt-sheet-view-model", "ytm-bottom-sheet-renderer", "dialog[open]", "tp-yt-paper-dialog", "ytm-search[open]", ".mobile-topbar-header[data-mode=searching]"],
       zoomCss: a.zoomCss || [],
       fullscreenButtons: a.fullscreenButtons || [],
       headerTimeoutMs: a.headerTimeoutMs || 8000,
@@ -1765,6 +1765,78 @@
   }
   function anySheet() { return openSheets().length > 0; }
   // 앱의 뒤로 가기: 열린 창(댓글·설명·메뉴·검색)부터 닫음 (유튜브 앱과 같음)
+  // ===========================================================================
+  // 창을 아래로 휙 밀면 닫힘 (2026-11-21, 사용자: "모든 팝업창에서 아래로 확 슬라이드하면 내려가야 하는데 안 내려가는 경우가 많음").
+  // 유튜브 웹은 창 위쪽 손잡이에서만 끌어 닫거나 아예 안 닫히는 창이 많음 → 창 안 어디서든 빠르게 아래로 밀면 닫음(유튜브 앱처럼).
+  //  - 창 안 목록이 내려가 있으면(scrollTop > 0) 그 밀기는 목록 올리기 몫이라 닫지 않음
+  //  - 유튜브가 스스로 닫는 창도 있어 0.3초 뒤에도 열려 있을 때만 닫음 (같이 닫으면 두 번 눌려 다시 열렸음 — 동영상 더보기 창에서 겪음)
+  //  - 검색 중 상단 바·추천 탭 화면은 창이 아님(제외), 전체화면 동영상 더보기 창은 손동작 쪽에서 따로 처리
+  // ===========================================================================
+  var FL = null;
+  function flSheetOf(target) {
+    var open = openSheets();
+    for (var i = open.length - 1; i >= 0; i--) {
+      var el = open[i];
+      if (REC && el === REC.el) continue;
+      if (el.matches && el.matches('.mobile-topbar-header, ytm-search, .fullscreen-controls')) continue;
+      if (el.contains(target)) return el;
+    }
+    return null;
+  }
+  function flScrolled(target, sheet) {
+    for (var e = target; e && e !== sheet.parentNode; e = e.parentElement) {
+      if (e.scrollTop > 2 && e.scrollHeight > e.clientHeight + 4) return true;
+    }
+    return false;
+  }
+  function flClose(el) {
+    if (QU && el === QU.sheet) { quSheetClose(); return; }
+    if (REC && el === REC.editor) { recEditorClose(); return; }
+    var b = el.querySelector('button[aria-label="닫기"], button[aria-label="Close"]');
+    if (b) { b.click(); return; }
+    var scrims = document.querySelectorAll('ytw-scrim, .ytWebScrimHost, .bottom-sheet-overlay, .modal-overlay');
+    for (var k = scrims.length - 1; k >= 0; k--) if (scrims[k].getClientRects().length) { scrims[k].click(); return; }
+    var cancel = [].filter.call(el.querySelectorAll('button'), function (x) { return /^(취소|Cancel)$/.test((x.textContent || '').trim()); })[0];
+    if (cancel) { cancel.click(); return; }
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+  }
+  // 창이 열렸는데 앱이 아직 '당겨서 새로고침 가능'으로 알고 있으면 아래로 미는 손가락을 앱(새로고침)이 가져가 창이 안 내려가고 목록이 새로고침됐음(실기).
+  // 1초마다 알리던 것을 창을 여는 탭 직후·손가락이 닿는 순간에도 바로 알림
+  W.addEventListener('click', function () {
+    [120, 350, 700].forEach(function (ms) { G.setTimeout.call(W, function () { try { reportPull(); } catch (x) { /* ignore */ } }, ms); });
+  }, true);
+  document.addEventListener('touchstart', function (e) {
+    try { if (lastPull && !pullable()) reportPull(); } catch (x) { /* ignore */ }
+    FL = null;
+    if (!S().enabled || !onYT() || e.touches.length !== 1 || !e.target || !e.target.closest) return;
+    var sheet = flSheetOf(e.target);
+    if (!sheet) return;
+    var t = e.touches[0];
+    FL = { el: sheet, x: t.clientX, y: t.clientY, t: Date.now(), scrolled: flScrolled(e.target, sheet) };
+  }, { capture: true, passive: true });
+  document.addEventListener('touchmove', function (e) {
+    // 밀기 도중 목록이 굴러 내려가 있으면(위로 갔다 내려온 경우) 닫기 아님
+    if (FL && !FL.scrolled && e.target && flScrolled(e.target, FL.el)) FL.scrolled = true;
+  }, { capture: true, passive: true });
+  document.addEventListener('touchend', function (e) {
+    var f = FL; FL = null;
+    if (!f || f.scrolled || !e.changedTouches[0]) return;
+    var t = e.changedTouches[0], dy = t.clientY - f.y, dx = t.clientX - f.x, ms = Date.now() - f.t;
+    // 빠른 아래 밀기: 70px 넘게, 0.4px/ms 넘게, 세로 위주
+    if (dy < 70 || ms > 600 || dy / Math.max(ms, 1) < 0.4 || Math.abs(dx) > dy * 0.7) return;
+    var el = f.el;
+    G.setTimeout.call(W, function () {
+      if (!el.isConnected || !el.getClientRects().length) return;
+      var r = el.getBoundingClientRect();
+      if (r.height < 40 || r.top >= innerHeight) return;
+      if (openSheets().indexOf(el) < 0) return; // 유튜브가 이미 닫음
+      G.send('haptic', { kind: 'gesture' });
+      flClose(el);
+      lastGeom = ''; G.setTimeout.call(W, function () { lastGeom = ''; reportGeom(); }, 450);
+      log('info', '창 아래로 밀기 → 닫음 (' + (el.tagName || '').toLowerCase() + ')');
+    }, 300);
+  }, { capture: true, passive: true });
+
   G.onCommand('closeSheet', function () {
     if (QU && QU.sheet) { quSheetClose(); return; }
     if (REC && REC.editor) { recEditorClose(); return; }
