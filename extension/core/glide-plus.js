@@ -557,6 +557,7 @@
     G.send('resume:save', { videoId: vid, t: Math.floor(v.currentTime), d: Math.floor(v.duration), title: rsTitle(vid), historyOnly: !on('resume') });
   }
   function rsAsk(p) {
+    if (G.musicNow ? G.musicNow() : (document.documentElement && document.documentElement.hasAttribute('data-glide-music'))) return;
     var vid = videoIdOf(p);
     if (!on('resume') || !vid || RS.asked === vid || capturing()) return;
     RS.asked = vid;

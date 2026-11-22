@@ -17,8 +17,8 @@
 (function () {
   'use strict';
 
-  var CORE_VERSION = '1.0.0';
-  var CORE_API = 1; // filters.json의 minCore와 비교
+  var CORE_VERSION = '1.0.1';
+  var CORE_API = 2; // filters.json의 minCore와 비교
 
   var W = window;
   var MARK = Symbol.for('glide.core');
@@ -1525,7 +1525,7 @@
   //   프리미엄 전용 화질(paygated)은 고르지 않음
   // ===========================================================================
   var Q_ORDER = ['highres', 'hd2160', 'hd1440', 'hd1080', 'hd720', 'large', 'medium', 'small', 'tiny'];
-  var Q_MAP = { '2160': 'hd2160', '1440': 'hd1440', '1080': 'hd1080', '720': 'hd720', '480': 'large', '360': 'medium', '240': 'small' };
+  var Q_MAP = { '144': 'tiny', '2160': 'hd2160', '1440': 'hd1440', '1080': 'hd1080', '720': 'hd720', '480': 'large', '360': 'medium', '240': 'small' };
   var Q_LABEL = { highres: '4320p', hd2160: '2160p', hd1440: '1440p', hd1080: '1080p', hd720: '720p', large: '480p', medium: '360p', small: '240p', tiny: '144p' };
   var qualityDone = '';
   // ---------------------------------------------------------------------------
@@ -1563,6 +1563,17 @@
     var h = document.documentElement;
     return PLATFORM === 'android' && !!S.listenSaver && !!h && h.hasAttribute('data-glide-bg');
   }
+  // Glide Music(앱 음악 탭)으로 연 곡: 영상 웹뷰의 html[data-glide-music] (glide-android.js mpBoot/mpTick)
+  // 주소에 glide_music=1 이거나, 음악 세션(localStorage 'glide:gm', 24시간)의 곡이면 음악. 영상 웹뷰에서만
+  function musicNow() {
+    if (PLATFORM !== 'android' || !S.enabled || (S.role && S.role !== 'player') || location.pathname !== '/watch') return false;
+    if (/[?&]glide_mv=1/.test(location.search)) return false; // 뮤직비디오 보기
+    var v = urlVideoId();
+    var mv = document.documentElement && document.documentElement.getAttribute('data-glide-mv'); if (v && mv && mv === v) return false;
+    if (/[?&]glide_music=1/.test(location.search)) return true;
+    if (!v) return false;
+    try { var s = JSON.parse(localStorage.getItem('glide:gm') || 'null'); return !!(s && s.items && Date.now() - (s.at || 0) < 864e5 && s.items.some(function (x) { return x && x.id === v; })); } catch (e) { return false; }
+  }
   function inProgress(vid) { return playVid === vid && Date.now() - playAt > 2500; }
   // 본 플레이어의 'playing'마다:
   //  - 앱이 보이는 동안 재생을 시작한 영상(광고 중 포함)은 듣기 모드가 손대지 않음 (qualityVid).
@@ -1586,11 +1597,15 @@
     if (qualityListen === vid) return; // 듣기 모드로 시작한 영상: 화면을 켜도 끝까지 그대로
     var v = videoOf(p);
     var at = v ? (v.currentTime || 0) : 0;
-    var listen = listenNow();
-    if (listen && (qualityVid === vid || at > 2 || inProgress(vid))) { qualityVid = vid; return; } // 이미 시작한 영상(이어보기 위치 포함): 그대로 둠
+    var music = musicNow();
+    var listen = listenNow() || music;
+    // 음악: 곡마다 처음 한 번 144p (이어보기 위치가 있어도 — 음악은 처음부터 재생하므로 at 은 보지 않음)
+    // (속성이 첫 재생보다 늦게 붙어 이미 다른 화질로 정했어도 한 번은 144p로 바꿈)
+    if (music && qualityDone === vid + '144') return;
+    if (!music && listen && (qualityVid === vid || at > 2 || inProgress(vid))) { qualityVid = vid; return; } // 이미 시작한 영상(이어보기 위치 포함): 그대로 둠
     // 화질을 이미 정했고 본편이 재생 중인 영상: 설정(와이파이·데이터 화질)이 바뀌어도 그대로, 다음 영상부터 (재생 중 화질 변경 = 처음부터 다시 불러옴, 1.5.5)
-    if (decidedVid === vid && inProgress(vid)) return;
-    var want = listen ? '240' : S.quality;
+    if (!music && decidedVid === vid && inProgress(vid)) return;
+    var want = music ? '144' : listen ? '240' : S.quality;
     if (!want || want === 'auto') {
       // 직전 듣기 모드 영상의 240p 고정이 플레이어에 남아 있으면, 새 영상을 시작할 때(재생 전) 풀어 줌
       if (!listen && listenLocked && at < 1 && !inProgress(vid)) {
@@ -1739,7 +1754,11 @@
     lastMedia = '';
     send('media', { state: 'none', main: false });
   }
+  // 저장된 곡 재생(Glide Music): 유튜브 영상 대신 페이지의 소리 요소가 재생하는 동안은 그쪽이 상태를 알리고 조작을 받음
+  var localMedia = null;
+  function setLocalMedia(h) { localMedia = typeof h === 'function' ? h : null; lastMedia = ''; }
   function mediaReport(v, p, type) {
+    if (localMedia) return;
     // seeked·ratechange: 잠금화면·알림의 진행 위치는 마지막 보고 위치와 배속으로 계산되므로 이동·배속 변화도 알림
     if (type !== 'playing' && type !== 'pause' && type !== 'loadedmetadata' && type !== 'ended' && type !== 'durationchange' && type !== 'seeked' && type !== 'ratechange') return;
     if (!p || !isMainPlayer(p) || !watchContext()) return;
@@ -1766,6 +1785,7 @@
     return document.querySelector('#movie_player') || document.querySelector(F.player.selector);
   }
   function runCommand(cmd, arg) {
+    if (localMedia && PLATFORM === 'android') { try { if (localMedia(cmd, arg)) return; } catch (e) { log('error', 'cmd', '저장된 곡 조작 실패: ' + e.message); } }
     // 영상 화면을 떠났으면 알림·블루투스의 재생 조작이 홈 피드 미리보기를 틀지 않게 무시
     if (PLATFORM === 'android' && !watchContext() && (cmd === 'play' || cmd === 'toggle' || cmd === 'next' || cmd === 'prev')) {
       log('info', 'cmd', cmd + ' 무시 (영상 화면이 아님)');
@@ -1853,7 +1873,7 @@
         mainPlayer: mainPlayer, playerOf: playerOf, videoOf: videoOf, isMainPlayer: isMainPlayer,
         isAdShowing: isAdShowing, inAd: function () { return SK.inAd; },
         afterAd: function () { return perf() < SK.guardUntil; },
-        urlVideoId: urlVideoId, currentVideoId: currentVideoId,
+        urlVideoId: urlVideoId, currentVideoId: currentVideoId, musicNow: musicNow, setLocalMedia: setLocalMedia,
         videoMeta: function (id) { return (id && videoMeta.get(id)) || null; },
         getPath: getPath, setTimeout: nativeSetTimeout, clearTimeout: nativeClearTimeout,
         parse: nativeParse, stringify: nativeStringify, disguise: disguise, el: makeEl
