@@ -1952,6 +1952,7 @@
     if (REC && REC.editor) { recEditorClose(); return; }
     if (REC && REC.open) { recClose(); return; }
     if (GM && GM.menu) { gmMenuClose(); return; }
+    if (GM && GM.open && GM.sel) { gmSelEnd(); return; }
     if (GM && GM.open && (GM.view === 'artist' || GM.view === 'pl')) { gmArtistBack(); return; }
     if (GM && GM.open) { gmClose(); return; }
     if (fsPanel() && fsPanelClose()) return; // 전체화면 동영상 더보기 창 (닫기 ✕가 창 밖 위 조작부에 있음)
@@ -4215,10 +4216,10 @@
     return box;
   }
   function plToast(text) { if (role() === 'player') gmToastPlayer(text); else gmToast(text); }
-  function plAddedMsg(p, n, total) { return n ? '‘' + p.name + '’에 ' + (total > 1 ? n + '곡 ' : '') + '담았어요' : '이미 ‘' + p.name + '’에 있어요'; }
+  function plAddedMsg(p, n, total) { return n ? '‘' + p.name + '’에 ' + (total > 1 ? n + '곡 ' : '') + '담았어요' + (total > n ? ' (이미 있던 ' + (total - n) + '곡 빼고)' : '') : '이미 ‘' + p.name + '’에 있어요'; }
 
   // 담기 창 (둘러보기): 맨 위 '새 플레이리스트' → 이름 쓰고 바로 담김, 아래는 플레이리스트 목록 (누르면 바로 담김)
-  function plPick(items) {
+  function plPick(items, done) {
     gmMenuClose();
     items = (items || []).filter(function (x) { return x && x.id; });
     if (!items.length) return;
@@ -4226,12 +4227,12 @@
     var newRow = G.el('button', { type: 'button', 'class': 'pl-row nw' }, [G.el('div', { 'class': 'pl-cv' }, [G.el('i', { 'class': 'plus' })]), G.el('b', { text: '새 플레이리스트' })]);
     newRow.addEventListener('click', function (e) {
       e.preventDefault(); e.stopPropagation();
-      plAsk('새 플레이리스트', '', '만들고 담기', function (name) { var p = plNew(name); var n = plAdd(p.id, items); plToast(plAddedMsg(p, n, items.length)); });
+      plAsk('새 플레이리스트', '', '만들고 담기', function (name) { var p = plNew(name); var n = plAdd(p.id, items); plToast(plAddedMsg(p, n, items.length)); if (done) done(); if (GM.open && GM.view === 'mine') gmRender(); });
     }, true);
     body.appendChild(newRow);
     plAll().forEach(function (p) {
       var r = G.el('button', { type: 'button', 'class': 'pl-row' }, [plCover(p, 48), G.el('div', {}, [G.el('b', { text: p.name }), G.el('span', { text: p.items.length + '곡' })])]);
-      r.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); G.send('haptic', { kind: 'gesture' }); var n = plAdd(p.id, items); gmMenuClose(); plToast(plAddedMsg(p, n, items.length)); if (GM.open && GM.view === 'mine') gmRender(); }, true);
+      r.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); G.send('haptic', { kind: 'gesture' }); var n = plAdd(p.id, items); gmMenuClose(); plToast(plAddedMsg(p, n, items.length)); if (done) done(); if (GM.open && GM.view === 'mine') gmRender(); }, true);
       body.appendChild(r);
     });
     gmSheet([G.el('div', { 'class': 'gm-sh' }, [G.el('div', {}, [G.el('b', { text: '플레이리스트에 담기' }), G.el('span', { text: items.length > 1 ? items.length + '곡' : (items[0].title || '') })])]), body], 'pl-sheet');
@@ -4262,7 +4263,7 @@
   // 내 음악 맨 위: 플레이리스트 칸 (새로 만들기 + 내 플레이리스트들)
   function plShelf(body) {
     var l = plAll();
-    body.appendChild(G.el('div', { 'class': 'gm-head' }, [G.el('div', {}, [G.el('h2', { text: '내 플레이리스트' }), G.el('p', { text: l.length ? l.length + '개' : '곡의 ⋮ 또는 길게 눌러 담아요' })])]));
+    body.appendChild(G.el('div', { 'class': 'gm-head' }, [G.el('div', {}, [G.el('h2', { text: '내 플레이리스트' }), G.el('p', { text: l.length ? l.length + '개' : '곡의 ⋮로 담거나, 길게 눌러 여러 곡을 한 번에 담아요' })])]));
     var grid = G.el('div', { 'class': 'pl-grid' });
     var add = G.el('button', { type: 'button', 'class': 'pl-card nw' }, [G.el('div', { 'class': 'pl-cv' }, [G.el('i', { 'class': 'plus' })]), G.el('b', { text: '새로 만들기' })]);
     add.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); plAsk('새 플레이리스트', '', '만들기', function (name) { var p = plNew(name); plOpen(p.id); }); }, true);
@@ -4296,7 +4297,7 @@
     }, true);
     var secs = plSecs(p);
     body.appendChild(G.el('div', { 'class': 'pl-hd' }, [plCover(p, 132), G.el('div', {}, [G.el('h2', { text: p.name }), G.el('p', { text: p.items.length + '곡' + (secs ? ' · ' + gmDur(secs) : '') })]), more]));
-    if (!p.items.length) { body.appendChild(G.el('div', { 'class': 'gm-note', text: '곡의 ⋮ 또는 길게 눌러 ‘플레이리스트에 담기’' })); return; }
+    if (!p.items.length) { body.appendChild(G.el('div', { 'class': 'gm-note', text: '곡의 ⋮로 담거나, 길게 눌러 여러 곡을 한 번에 담아요' })); return; }
     body.appendChild(gmActs(p.items, true));
     var box = G.el('div', { 'class': 'pl-list' });
     p.items.forEach(function (x, i) {
@@ -4418,6 +4419,17 @@
       '.pl-more{all:unset;align-self:flex-start;width:40px;height:40px;border-radius:20px;display:flex;align-items:center;justify-content:center;cursor:pointer}.pl-more i{width:20px;height:20px;background-color:' + T2 + ';-webkit-mask:url("' + gmIcon('more') + '") center/20px 20px no-repeat}' +
       '.pl-list .gm-row{padding-left:4px}.pl-hdl{flex:none;width:30px;height:48px;margin-right:-6px;display:flex;align-items:center;justify-content:center;touch-action:none}.pl-hdl i{width:20px;height:20px;background-color:' + T2 + ';opacity:.6;-webkit-mask:url("' + gmIcon('drag') + '") center/20px 20px no-repeat}' +
       '.pl-list .gm-row.mv{transition:transform .18s cubic-bezier(.2,0,0,1)}.pl-list .gm-row.drag{position:relative;z-index:2;background:' + CH + ';box-shadow:0 6px 18px rgba(0,0,0,.2);border-radius:10px}' +
+      '#glide-music .gm-row.sel{background:rgba(59,91,255,.16)}' +
+      '#glide-music.gm-selmode .gm-row>button:last-child i{width:22px;height:22px;border-radius:11px;box-sizing:border-box;border:2px solid ' + T2 + ';background:transparent;-webkit-mask:none;opacity:.7}' +
+      '#glide-music.gm-selmode .gm-row.sel>button:last-child i{border:0;opacity:1;background:' + AC + ' url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22%3E%3Cpath d=%22M9.5 16.2 5.8 12.5l-1.4 1.4 5.1 5.1L20 8.5l-1.4-1.4z%22 fill=%22%23fff%22/%3E%3C/svg%3E") center/16px 16px no-repeat}' +
+      '#glide-music.gm-selmode .gm-row:active{transform:none}' +
+      '.gm-selbar{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;justify-content:center;gap:10px;background:' + BG + ';border-bottom:1px solid rgba(128,128,128,.18);animation:gmsel .18s cubic-bezier(.2,0,0,1) both}.gm-selbar.out{animation:gmsel .16s reverse both}@keyframes gmsel{from{opacity:0;transform:translateY(-6px)}}' +
+      '.gm-sh1{display:flex;align-items:center;gap:6px;padding:0 12px 0 6px}.gm-sh1 b{flex:1;font:800 18px/1 ' + F + '}' +
+      '.gm-sx{all:unset;width:40px;height:40px;border-radius:20px;display:flex;align-items:center;justify-content:center;cursor:pointer}.gm-sx i{width:22px;height:22px;background-color:' + T1 + ';-webkit-mask:url("' + gmIcon('close') + '") center/22px 22px no-repeat}' +
+      '.gm-sall{all:unset;padding:8px 10px;font:700 14px/1 ' + F + ';color:' + AC + ';cursor:pointer}' +
+      '.gm-sacts{display:flex;gap:8px;overflow-x:auto;padding:0 16px;scrollbar-width:none}.gm-sacts::-webkit-scrollbar{display:none}' +
+      '.gm-sa{all:unset;flex:none;display:flex;align-items:center;gap:6px;padding:9px 14px;border-radius:20px;background:' + CH + ';color:' + T1 + ';font:700 13px/1 ' + F + ';cursor:pointer;transition:transform .15s}.gm-sa:active{transform:scale(.95)}' +
+      '.gm-sa i{width:16px;height:16px;background-color:currentColor;-webkit-mask:center/16px 16px no-repeat}.gm-sa.p{background:' + AC + ';color:#fff}.gm-sa.red{color:#ff5a5f}' +
       '.gm-badge{margin-left:6px;padding:2px 6px;border-radius:4px;background:' + LIME + ';color:#111;font:800 10px/1 ' + F + ';vertical-align:2px}';
     (document.head || document.documentElement).appendChild(st);
   }
@@ -4488,6 +4500,7 @@
   }
   function gmClose() {
     if (!GM.open) return;
+    gmSelEnd();
     GM.open = false;
     if (GM.el) { GM.keepTop = GM.el.scrollTop; GM.el.hidden = true; }
     document.documentElement.classList.remove('glide-gm-open');
@@ -4508,22 +4521,88 @@
       var dv = delta[it.id];
       dl = dv === 'new' ? G.el('span', { 'class': 'gm-d nw', text: 'NEW' }) : dv > 0 ? G.el('span', { 'class': 'gm-d up', text: '▲' + dv }) : dv < 0 ? G.el('span', { 'class': 'gm-d dn', text: '▼' + (-dv) }) : G.el('span', { 'class': 'gm-d eq', text: '–' });
     }
-    var row = G.el('div', { 'class': 'gm-row', role: 'button' }, [
+    var row = G.el('div', { 'class': 'gm-row' + (GM.sel && GM.sel.ids[it.id] ? ' sel' : ''), role: 'button', 'data-gid': it.id }, [
       rank ? G.el('div', { 'class': 'gm-rank' + (rank <= 3 ? ' t' : '') }, [G.el('span', { text: String(rank) }), dl]) : null,
       G.el('div', { 'class': 'gm-art' }, [G.el('img', { src: 'https://i.ytimg.com/vi/' + it.id + '/mqdefault.jpg', alt: '', loading: i < 12 ? 'eager' : 'lazy', decoding: 'async' })]),
       G.el('div', { 'class': 'gm-txt' }, [G.el('b', { text: it.title }), G.el('span', { text: it.artist + (it.len ? ' · ' + it.len : '') })]),
       more
     ]);
-    // 줄 전체 듣기 (⋮ 버튼은 제외: 줄이 먼저 잡으면 ⋮를 눌러도 바로 재생됐음)
-    row.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('button')) return; e.preventDefault(); e.stopPropagation(); gmPlay(list, i, false); }, true);
-    // 길게 누르면 곡 메뉴
+    row._gmIt = it;
+    // 줄 전체 듣기 (⋮ 버튼은 제외: 줄이 먼저 잡으면 ⋮를 눌러도 바로 재생됐음). 여러 곡 고르는 중이면 체크/해제 (⋮ 자리의 동그라미 포함)
+    row.addEventListener('click', function (e) {
+      if (GM.sel) { if (e.target.closest && e.target.closest('.pl-hdl')) return; e.preventDefault(); e.stopPropagation(); gmSelToggle(it); return; }
+      if (e.target.closest && e.target.closest('button')) return; e.preventDefault(); e.stopPropagation(); gmPlay(list, i, false);
+    }, true);
+    // 길게 누르면 여러 곡 고르기 시작 (이미 고르는 중이면 체크/해제)
     var lp = null;
     var lx = 0, ly = 0;
-    row.addEventListener('touchstart', function (e) { clearTimeout(lp); lx = e.touches[0].clientX; ly = e.touches[0].clientY; lp = setTimeout(function () { lp = 'fired'; gmMenu(it); }, 480); }, { passive: true });
+    row.addEventListener('touchstart', function (e) { clearTimeout(lp); lx = e.touches[0].clientX; ly = e.touches[0].clientY; lp = setTimeout(function () { lp = 'fired'; gmSelToggle(it); }, 480); }, { passive: true });
     row.addEventListener('touchmove', function (e) { if (lp === 'fired') return; var t = e.touches[0]; if (Math.abs(t.clientX - lx) > 10 || Math.abs(t.clientY - ly) > 10) clearTimeout(lp); }, { passive: true });
     row.addEventListener('touchcancel', function () { if (lp !== 'fired') clearTimeout(lp); }, { passive: true });
     row.addEventListener('touchend', function (e) { if (lp === 'fired') { if (e.cancelable) e.preventDefault(); lp = null; } else clearTimeout(lp); });
     return row;
+  }
+  // ---- 여러 곡 고르기: 길게 누르면 시작, 위에 버튼 줄(플레이리스트에 담기·재생·다음에 재생·맨 뒤에 추가·빼기) ----
+  function gmSelToggle(it) {
+    if (!GM.el) return;
+    G.send('haptic', { kind: 'gesture' });
+    if (!GM.sel) GM.sel = { ids: {}, view: GM.view + ':' + (GM.plId || '') };
+    if (GM.sel.ids[it.id]) delete GM.sel.ids[it.id]; else GM.sel.ids[it.id] = it;
+    if (!Object.keys(GM.sel.ids).length) { gmSelEnd(); return; }
+    gmSelPaint();
+  }
+  function gmSelEnd() {
+    if (!GM.sel) return;
+    GM.sel = null;
+    if (GM.el) { GM.el.classList.remove('gm-selmode'); [].forEach.call(GM.el.querySelectorAll('.gm-row.sel'), function (r) { r.classList.remove('sel'); }); }
+    var b = GM.top && GM.top.querySelector('.gm-selbar'); if (b) { b.classList.add('out'); G.setTimeout.call(W, function () { b.remove(); }, 160); }
+  }
+  // 고른 곡: 화면 목록 순서대로 (같은 곡이 두 번 보여도 한 번)
+  function gmSelItems() {
+    if (!GM.sel) return [];
+    var seen = {}, out = [];
+    [].forEach.call(GM.body.querySelectorAll('.gm-row'), function (r) { var it = r._gmIt; if (it && GM.sel.ids[it.id] && !seen[it.id]) { seen[it.id] = 1; out.push(it); } });
+    Object.keys(GM.sel.ids).forEach(function (id) { if (!seen[id]) out.push(GM.sel.ids[id]); });
+    return out;
+  }
+  function gmSelAllRows() { var seen = {}, out = []; [].forEach.call(GM.body.querySelectorAll('.gm-row'), function (r) { var it = r._gmIt; if (it && !seen[it.id]) { seen[it.id] = 1; out.push(it); } }); return out; }
+  function gmSelPaint() {
+    if (!GM.sel || !GM.el) return;
+    GM.el.classList.add('gm-selmode');
+    [].forEach.call(GM.el.querySelectorAll('.gm-row'), function (r) { r.classList.toggle('sel', !!(r._gmIt && GM.sel.ids[r._gmIt.id])); });
+    var n = Object.keys(GM.sel.ids).length, all = gmSelAllRows(), allOn = all.length && all.every(function (x) { return GM.sel.ids[x.id]; });
+    var bar = GM.top.querySelector('.gm-selbar');
+    if (!bar) {
+      var x = G.el('button', { type: 'button', 'class': 'gm-sx', 'aria-label': '고르기 끝내기' }, [G.el('i')]);
+      x.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); gmSelEnd(); }, true);
+      var allB = G.el('button', { type: 'button', 'class': 'gm-sall' });
+      allB.addEventListener('click', function (e) {
+        e.preventDefault(); e.stopPropagation(); if (!GM.sel) return;
+        var rows = gmSelAllRows(), on = rows.length && rows.every(function (y) { return GM.sel.ids[y.id]; });
+        if (on) { gmSelEnd(); return; }
+        rows.forEach(function (y) { GM.sel.ids[y.id] = y; }); G.send('haptic', { kind: 'gesture' }); gmSelPaint();
+      }, true);
+      var act = function (cls, icon, text, fn) {
+        var b = G.el('button', { type: 'button', 'class': 'gm-sa ' + cls }, [G.el('i', { style: '-webkit-mask-image:url("' + gmIcon(icon) + '")' }), text]);
+        b.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); var items = gmSelItems(); if (!items.length) return; G.send('haptic', { kind: 'gesture' }); fn(items); }, true);
+        return b;
+      };
+      var q = function (x) { return { id: x.id, title: x.title, ch: x.artist }; };
+      var acts = G.el('div', { 'class': 'gm-sacts' }, [
+        act('p', 'add', '플레이리스트에 담기', function (items) { plPick(items, gmSelEnd); }),
+        act('', 'play', '재생', function (items) { gmSelEnd(); gmPlay(items, 0, false); }),
+        act('', 'list', '다음에 재생', function (items) { items.slice().reverse().forEach(function (x) { G.send('queueAdd', Object.assign({ front: true }, q(x))); }); gmSelEnd(); gmToast(items.length + '곡을 다음에 재생해요'); }),
+        act('', 'add', '맨 뒤에 추가', function (items) { items.forEach(function (x) { G.send('queueAdd', q(x)); }); gmSelEnd(); gmToast(items.length + '곡을 재생 대기열 맨 뒤에 추가했어요'); }),
+        GM.view === 'pl' && GM.plId ? act('red', 'close', '빼기', function (items) {
+          var p = plGet(GM.plId); if (!p) return; var del = {}; items.forEach(function (x) { del[x.id] = 1; });
+          p.items = p.items.filter(function (x) { return !del[x.id]; }); plPut(p); gmSelEnd(); var keep = GM.el.scrollTop; gmRender(); GM.el.scrollTop = keep; gmToast(items.length + '곡을 뺐어요');
+        }) : null
+      ]);
+      bar = G.el('div', { 'class': 'gm-selbar' }, [G.el('div', { 'class': 'gm-sh1' }, [x, G.el('b', { 'class': 'gm-sn' }), allB]), acts]);
+      GM.top.appendChild(bar);
+    }
+    bar.querySelector('.gm-sn').textContent = n + '곡 선택';
+    bar.querySelector('.gm-sall').textContent = allOn ? '선택 해제' : '전체 선택';
   }
   function gmToast(text) {
     var t = document.getElementById('glide-gm-toast');
@@ -4534,6 +4613,7 @@
   function gmList(list, ranked, delta) {
     var box = G.el('div', {});
     list.forEach(function (x, i) { box.appendChild(gmRow(list, i, ranked ? i + 1 : 0, delta)); });
+    if (GM.sel) G.setTimeout.call(W, gmSelPaint, 0);
     return box;
   }
   function gmActs(list, inPl) {
@@ -4554,6 +4634,7 @@
   }
   function gmRender() {
     if (!GM.el) return;
+    if (GM.sel && GM.sel.view !== GM.view + ':' + (GM.plId || '')) gmSelEnd();
     var tabs = GM.top.querySelector('.gm-tabs');
     recClear(tabs);
     GM_VIEWS.forEach(function (v) {
