@@ -1878,6 +1878,7 @@
     else if (REC && REC.open && REC.el) out.push(REC.el);
     if (GM && GM.open && GM.el) out.push(GM.el);
     if (GM && GM.menu) out.push(GM.menu.sh);
+    if (GM && GM.sug) out.push(GM.sug);
     var fp = fsPanel(); if (fp) out.push(fp);
     for (var i = 0; i < A.pullBlockers.length; i++) {
       var els = [];
@@ -1991,6 +1992,7 @@
     if (REC && REC.editor) { recEditorClose(); return; }
     if (REC && REC.open && REC.view !== 'all') { recGo('all'); return; } // 추천의 다른 보기 → 전체 보기 먼저
     if (REC && REC.open) { recClose(); goHomeTab(); return; } // 추천 탭 첫 화면 → 홈 탭
+    if (GM && GM.sug) { gmSugClose(); if (GM.input) GM.input.blur(); return; } // 검색 연관 검색어 목록
     if (GM && GM.menu) { gmMenuClose(); return; }
     if (GM && GM.open && GM.sel) { gmSelEnd(); return; }
     if (GM && GM.open && GM.stack && GM.stack.length) { gmBack(); return; } // 음악 탭 안의 이전 화면 (장르 상세·검색·가수·플레이리스트)
@@ -3486,6 +3488,7 @@
     var tb = gmBars();
     REC.el.style.top = tb[0] + 'px'; REC.el.style.bottom = tb[1] + 'px';
   }
+  G.onCommand('openRec', function () { if (role() !== 'browse') return; try { if (GM && GM.open) gmClose(); if (!REC.open) recOpen(); } catch (e) { /* ignore */ } });
   function recOpen() {
     if (!recOn()) return;
     if (GM && GM.open) gmClose();
@@ -3950,11 +3953,52 @@
     return yti('search', { query: q, params: sp || 'EgIQAQ%3D%3D' }).then(function (j) { return gmItems(j).items.filter(gmSongLike); });
   }
   // 노래 찾기: 4분 이하·4~20분 영상을 따로 찾아 번갈아 합침 (그냥 찾으면 몇 시간짜리 모음 영상이 대부분이라 장르 목록이 거의 비었음 — 실제 사이트 검사)
-  function gmSearchSongs(q) {
-    return Promise.all([gmSearch(q, 'EgQQARgB').catch(function () { return []; }), gmSearch(q, 'EgQQARgD').catch(function () { return []; })]).then(function (r) {
-      var out = [], seen = {}, i = 0;
-      while (i < r[0].length || i < r[1].length) { [r[0][i], r[1][i]].forEach(function (x) { if (x && !seen[x.id]) { seen[x.id] = 1; out.push(x); } }); i++; }
-      return out;
+  function gmSearchPage(q, sp, cont) {
+    return yti('search', cont ? { continuation: cont } : { query: q, params: sp }).then(function (j) { var r = gmItems(j); return { items: r.items.filter(gmSongLike), cont: r.cont }; });
+  }
+  // 한 필터로 여러 묶음 (pages 만큼). 마지막 다음 묶음 토큰도 돌려줌 (더 불러오기용)
+  function gmSearchDeep(q, sp, pages, cont0) {
+    var all = [], seen = {};
+    function step(cont, n) {
+      return gmSearchPage(q, sp, cont).then(function (r) {
+        r.items.forEach(function (x) { if (!seen[x.id]) { seen[x.id] = 1; all.push(x); } });
+        if (r.cont && n + 1 < pages) return step(r.cont, n + 1);
+        return { items: all, cont: r.cont || null };
+      });
+    }
+    return step(cont0 || null, 0).catch(function () { return { items: all, cont: null }; });
+  }
+  function gmAlt(a, b) { var out = [], seen = {}, i = 0; while (i < a.length || i < b.length) { [a[i], b[i]].forEach(function (x) { if (x && !seen[x.id]) { seen[x.id] = 1; out.push(x); } }); i++; } return out; }
+  var GM_SP = ['EgQQARgB', 'EgQQARgD']; // 4분 이하 · 4~20분
+  var GM_NOISE = /직캠|fancam|리액션|reaction|반응|인터뷰|interview|수상|소감|speech|비하인드|behind|예능|몰아보기|모음|full\s?concert|콘서트|concert|뉴스|news|눈길|논란|근황|폭로|충격|진실|다큐|해명|사건|댓글|노래방|karaoke|\bmr\b|\binst\b|playlist|플레이리스트|연속\s?듣기|\d+\s?시간|#|@|…|\?!|!!|\bep\.?\s?\d|\d+\s?회\b|자막|sub\b|해외반응|분석/i;
+  function gmNormQ(x) { return String(x || '').toLowerCase().replace(/[\s\-_.·()\[\]'"]/g, ''); }
+  // 점수: 공식 음원·공식 채널·'가수 - 제목'·짧은 제목은 위로, 뉴스·예능·직캠·모음은 아래로 (같은 점수는 원래 순서)
+  function gmRank(list, q) {
+    var nq = gmNormQ(q);
+    return list.map(function (x, i) {
+      var ch = String(x.ch || ''), raw = String(x.raw || x.title || ''), sc = 0;
+      if (/-\s*Topic$/i.test(ch)) sc += 4;
+      if (/vevo$|official|공식/i.test(ch)) sc += 2;
+      if (nq && (gmNormQ(ch).indexOf(nq) !== -1 || gmNormQ(x.artist).indexOf(nq) !== -1)) sc += 2;
+      if (/\s[-–]\s|['‘"“].+['’"”]|\b(m\/?v|official|audio|lyrics?|가사)\b/i.test(raw)) sc += 1;
+      if (raw.length <= 40) sc += 1; else if (raw.length > 70) sc -= 2;
+      if (GM_NOISE.test(raw)) sc -= 5;
+      return { x: x, s: sc, i: i };
+    }).sort(function (a, b) { return b.s - a.s || a.i - b.i; }).map(function (o) { return o.x; });
+  }
+  // 노래 찾기: 4분 이하·4~20분 영상을 따로 찾아 번갈아 합침 (그냥 찾으면 몇 시간짜리 모음 영상이 대부분이라 장르 목록이 거의 비었음 — 실제 사이트 검사).
+  // pages: 필터마다 몇 묶음까지 (검색 화면 3, 장르·가수 1). 다음 묶음 토큰은 GM.sconts[q] 에 (끝까지 내리면 더 불러오기)
+  function gmSearchSongs(q, pages) {
+    return Promise.all(GM_SP.map(function (sp) { return gmSearchDeep(q, sp, pages || 1); })).then(function (r) {
+      (GM.sconts = GM.sconts || {})[q] = [r[0].cont, r[1].cont];
+      return gmAlt(r[0].items, r[1].items);
+    });
+  }
+  function gmSearchMore(q) {
+    var c = (GM.sconts || {})[q]; if (!c || (!c[0] && !c[1])) return Promise.resolve([]);
+    return Promise.all(GM_SP.map(function (sp, i) { return c[i] ? gmSearchDeep(q, sp, 2, c[i]) : Promise.resolve({ items: [], cont: null }); })).then(function (r) {
+      GM.sconts[q] = [r[0].cont, r[1].cont];
+      return gmAlt(r[0].items, r[1].items);
     });
   }
   // 좋아요한 곡(유튜브 '좋아요 표시한 동영상' LL): 계정이 필요해 페이지의 로그인으로 받음 (SAPISIDHASH). 음악다운 길이만
@@ -4091,6 +4135,12 @@
     GM.view = 'artist'; GM.artist = name; GM.aTab = 'top';
     if (!GM.open) gmOpen(); else { gmRender(); GM.el.scrollTop = 0; }
   }
+  G.onCommand('openMusic', function (a) {
+    if (role() !== 'browse' || !gmOn()) return;
+    if (REC && REC.open) recClose();
+    if (!GM.open) gmOpen();
+    if (a && a.search && GM.input) { GM.stack = []; G.setTimeout.call(W, function () { try { GM.input.focus(); GM.input.select(); gmSugShow(); } catch (e) { /* ignore */ } }, 150); }
+  });
   G.onCommand('musicArtist', function (a) { if (a && a.name && gmOn()) gmArtist(String(a.name).slice(0, 80)); });
   function gmArtistBack() { if (gmBack()) return; if (GM.fromOut) { GM.fromOut = false; gmClose(); return; } /* 재생 화면에서 가수를 열었으면 뒤로 = 원래 화면 */ GM.view = GM.prevView && GM.prevView !== 'artist' && GM.prevView !== 'pl' ? GM.prevView : (GM.view === 'pl' ? 'mine' : 'chart'); gmRender(); GM.el.scrollTop = 0; }
   function gmNorm(s) { return String(s || '').toLowerCase().replace(/[^0-9a-z가-힣]/g, ''); }
@@ -4504,6 +4554,15 @@
       '#glide-np button i{width:22px;height:22px;background-color:currentColor;-webkit-mask:center/22px 22px no-repeat}#glide-np button:nth-of-type(2) i{width:26px;height:26px;-webkit-mask-size:26px 26px}' +
       '#glide-np .np-tr{position:absolute;left:12px;right:12px;bottom:0;height:2px;background:rgba(128,128,128,.35);border-radius:1px}#glide-np:not(.live) .np-tr{display:none}#glide-np .np-pg{display:block;height:100%;width:0;background:' + AC + ';border-radius:1px;transition:width .5s linear}' +
       '#glide-music.np-on .gm-body{padding-bottom:76px}' +
+      '.gm-sug{position:absolute;left:12px;right:12px;top:48px;z-index:5;max-height:50vh;overflow-y:auto;overscroll-behavior:contain;padding:4px 0;border-radius:12px;background:linear-gradient(' + CH + ',' + CH + '),' + BG + ';box-shadow:0 6px 16px rgba(0,0,0,.18),0 0 0 1px rgba(128,128,128,.12);animation:gmsel .14s cubic-bezier(.2,0,0,1) both}' +
+      '.gm-sg-row{display:flex;align-items:center;gap:10px;padding:0 2px 0 12px;height:38px;font:400 14px/1.2 ' + F + ';color:' + T1 + ';cursor:pointer;-webkit-tap-highlight-color:transparent}.gm-sg-row:active{background:rgba(128,128,128,.14)}' +
+      '.gm-sg-hd{display:flex;align-items:center;justify-content:space-between;padding:6px 12px 2px;font:600 12px/1 ' + F + ';color:' + T2 + '}.gm-sg-hd button{all:unset;padding:6px 2px;font:500 12px/1 ' + F + ';color:' + T2 + ';cursor:pointer}' +
+      '.gm-sg-row span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+      '.gm-sg-ic{flex:none;width:15px;height:15px;background-color:' + T2 + ';-webkit-mask:url("' + gmIcon('search') + '") center/15px 15px no-repeat}' +
+      '.gm-sg-row.r .gm-sg-ic{-webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%23000%27 stroke-width=%272%27 stroke-linecap=%27round%27%3E%3Ccircle cx=%2712%27 cy=%2712%27 r=%279%27/%3E%3Cpath d=%27M12 7v5l3 2%27/%3E%3C/svg%3E")}' +
+      '.gm-sg-x,.gm-sg-fill{all:unset;flex:none;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:20px}' +
+      '.gm-sg-x::after,.gm-sg-fill::after{content:"";width:13px;height:13px;background-color:' + T2 + ';-webkit-mask:url("' + gmIcon('close') + '") center/13px 13px no-repeat}' +
+      '.gm-sg-fill::after{-webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%23000%27 stroke-width=%272%27 stroke-linecap=%27round%27%3E%3Cpath d=%27M17 17L7 7M7 15V7h8%27/%3E%3C/svg%3E")}' +
       '.gm-badge{margin-left:6px;padding:2px 6px;border-radius:4px;background:' + LIME + ';color:#111;font:800 10px/1 ' + F + ';vertical-align:2px}';
     (document.head || document.documentElement).appendChild(st);
   }
@@ -4525,11 +4584,79 @@
     bar.insertBefore(tab, last);
     recEnsureTab(); // 추천 탭이 음악 탭 앞에 오게
   }
+  // ---- 검색 연관 검색어·최근 검색어 ----
+  var GM_SH = 'glide:gmSearchHist';
+  function gmDoSearch(q) {
+    q = String(q || '').trim(); if (!q) return;
+    var h = (gmLsGet(GM_SH) || []).filter(function (x) { return x !== q; }); h.unshift(q); gmLsSet(GM_SH, h.slice(0, 20));
+    gmSugClose();
+    if (GM.input) { GM.input.value = q; GM.input.blur(); }
+    gmPush(); GM.q = q; GM.view = 'search'; gmRender(); if (GM.el) GM.el.scrollTop = 0;
+  }
+  function gmSugClose() { if (GM.sug) { GM.sug.remove(); GM.sug = null; lastGeom = ''; reportGeom(); } clearTimeout(GM.sugT); }
+  function gmSugShow() {
+    var input = GM.input; if (!input || !GM.open) return;
+    var q = input.value.trim();
+    clearTimeout(GM.sugT);
+    if (!q) { gmSugDraw((gmLsGet(GM_SH) || []).slice(0, 6), true); return; }
+    GM.sugT = G.setTimeout.call(W, function () {
+      var want = q;
+      fetch('https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&hl=ko&q=' + encodeURIComponent(want), { credentials: 'omit' })
+        .then(function (r) { return r.json(); }).then(function (j) {
+          if (!GM.input || GM.input.value.trim() !== want || document.activeElement !== GM.input) return;
+          var list = (j && j[1] || []).filter(function (x) { return typeof x === 'string' && x !== want; }).slice(0, 6);
+          // 최근 검색어 중 지금 글자로 시작하는 것을 맨 위에
+          var rec = (gmLsGet(GM_SH) || []).filter(function (x) { return x.indexOf(want) === 0 && list.indexOf(x) === -1; }).slice(0, 2);
+          gmSugDraw(rec.concat(list).slice(0, 6), false, rec.length);
+        }).catch(function () {});
+    }, 120);
+  }
+  function gmSugDraw(items, recent, nRecent) {
+    if (!GM.top) return;
+    if (!items.length) { gmSugClose(); return; }
+    var box = GM.sug;
+    if (!box) {
+      box = GM.sug = G.el('div', { 'class': 'gm-sug', role: 'listbox' });
+      // 누르는 동안 검색창 포커스가 빠지지 않게 (blur 로 목록이 먼저 닫히지 않게)
+      box.addEventListener('mousedown', function (e) { e.preventDefault(); }, true);
+      box.addEventListener('touchstart', function () { GM.sugTouch = Date.now(); }, { passive: true });
+      GM.top.appendChild(box);
+      lastGeom = ''; reportGeom();
+    }
+    recClear(box);
+    try {
+      var lab = GM.input.closest('.gm-search'), tr = GM.top.getBoundingClientRect(), lr = lab.getBoundingClientRect();
+      box.style.left = Math.round(lr.left - tr.left) + 'px'; box.style.right = Math.round(tr.right - lr.right) + 'px'; box.style.top = Math.round(lr.bottom - tr.top + 6) + 'px';
+    } catch (e) { /* ignore */ }
+    if (recent) {
+      var clr = G.el('button', { type: 'button', text: '전체 삭제' });
+      clr.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); gmLsSet(GM_SH, []); gmSugClose(); }, true);
+      box.appendChild(G.el('div', { 'class': 'gm-sg-hd' }, [G.el('span', { text: '최근 검색어' }), clr]));
+    }
+    items.forEach(function (t, i) {
+      var isRecent = recent || i < (nRecent || 0);
+      var row = G.el('div', { 'class': 'gm-sg-row' + (isRecent ? ' r' : ''), role: 'option' }, [G.el('i', { 'class': 'gm-sg-ic' }), G.el('span', { text: t })]);
+      row.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); G.send('haptic', { kind: 'gesture' }); gmDoSearch(t); }, true);
+      var side = isRecent
+        ? G.el('button', { type: 'button', 'class': 'gm-sg-x', 'aria-label': '최근 검색어 지우기' })
+        : G.el('button', { type: 'button', 'class': 'gm-sg-fill', 'aria-label': '검색창에 넣기' });
+      side.addEventListener('click', function (e) {
+        e.preventDefault(); e.stopPropagation();
+        if (isRecent) { gmLsSet(GM_SH, (gmLsGet(GM_SH) || []).filter(function (x) { return x !== t; })); gmSugShow(); }
+        else { GM.input.value = t + ' '; GM.input.focus(); gmSugShow(); }
+      }, true);
+      row.appendChild(side);
+      box.appendChild(row);
+    });
+  }
   function gmBuild() {
     if (GM.el && GM.el.isConnected) return;
     gmCss();
-    var input = G.el('input', { type: 'search', placeholder: '노래, 가수 검색', enterkeyhint: 'search' });
-    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); var q = input.value.trim(); if (q) { gmPush(); GM.q = q; GM.view = 'search'; input.blur(); gmRender(); } } });
+    var input = G.el('input', { type: 'search', placeholder: '노래, 가수 검색', enterkeyhint: 'search', autocomplete: 'off' });
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); gmDoSearch(input.value); } });
+    input.addEventListener('focus', function () { gmSugShow(); });
+    input.addEventListener('input', function () { gmSugShow(); });
+    input.addEventListener('blur', function () { G.setTimeout.call(W, function () { if (document.activeElement !== input && Date.now() - (GM.sugTouch || 0) > 600) gmSugClose(); }, 150); });
     GM.top = G.el('div', { 'class': 'gm-top' }, [
       G.el('div', { 'class': 'gm-brand' }, [G.el('b', {}, ['Glide ', G.el('span', { text: 'Music' })]), G.el('label', { 'class': 'gm-search' }, [G.el('i'), input])]),
       G.el('div', { 'class': 'gm-tabs' })
@@ -4538,7 +4665,7 @@
     GM.body = G.el('div', { 'class': 'gm-body' });
     GM.el = G.el('div', { id: 'glide-music', hidden: '' }, [GM.top, GM.body]);
     document.body.appendChild(GM.el);
-    GM.el.addEventListener('scroll', function () { reportPull(); }, { passive: true });
+    GM.el.addEventListener('scroll', function () { reportPull(); if (GM.moreFn && GM.el.scrollTop + GM.el.clientHeight > GM.el.scrollHeight - 700) GM.moreFn(); }, { passive: true });
   }
   // 상단 바·아래 메뉴의 '보일 때' 높이 (지금 위치가 아니라 크기로: 스크롤로 숨었다 내려오는 중이어도 같은 값)
   function gmBars() {
@@ -4576,6 +4703,7 @@
   }
   function gmClose() {
     if (!GM.open) return;
+    gmSugClose();
     gmSelEnd();
     GM.stack = [];
     GM.open = false;
@@ -4895,6 +5023,7 @@
     });
     recClear(GM.body);
     var body = GM.body, view = GM.view, token = (GM.token = (GM.token || 0) + 1);
+    GM.moreFn = null;
     var load = G.el('div', { 'class': 'gm-load', text: '불러오는 중…' });
     var fail = function (e) { if (token !== GM.token) return; recClear(body); body.appendChild(G.el('div', { 'class': 'gm-note', text: '목록을 받지 못했어요. 당겨서 다시 시도해 주세요' })); log('warn', '음악 탭: ' + (e && e.message)); };
     if (view === 'chart') {
@@ -5014,14 +5143,34 @@
     } else if (view === 'search') {
       var q = GM.q;
       body.appendChild(load);
-      gmGet('q:' + q, function () { return gmSearchSongs(q).then(gmDedupe); }).then(function (list) {
+      gmGet('q:' + q, function () { return gmSearchSongs(q, 3).then(gmDedupe); }).then(function (list) {
         if (token !== GM.token) return;
         load.remove();
-        list = gmPure(list);
-        body.appendChild(G.el('div', { 'class': 'gm-head' }, [G.el('div', {}, [G.el('h2', { text: '‘' + q + '’' }), G.el('p', { text: '검색 결과 ' + list.length + '곡' })])]));
+        list = gmRank(gmPure(list), q);
+        var cnt = G.el('p', { text: '검색 결과 ' + list.length + '곡' });
+        body.appendChild(G.el('div', { 'class': 'gm-head' }, [G.el('div', {}, [G.el('h2', { text: '‘' + q + '’' }), cnt])]));
         if (!list.length) { body.appendChild(G.el('div', { 'class': 'gm-note', text: '찾은 노래가 없어요' })); return; }
         body.appendChild(gmActs(list));
-        body.appendChild(gmList(list, false));
+        var box = gmList(list, false), tail = G.el('div', { 'class': 'gm-load', text: '' });
+        body.appendChild(box); body.appendChild(tail);
+        // 끝까지 내리면 다음 묶음 (같은 곡·이미 있는 곡은 빼고 아래에 붙임)
+        var busy = false, done = false;
+        GM.moreFn = function () {
+          if (busy || done || token !== GM.token) return;
+          busy = true; tail.textContent = '더 불러오는 중…';
+          gmSearchMore(q).then(function (more) {
+            busy = false;
+            if (token !== GM.token) return;
+            var have = {}; list.forEach(function (x) { have[gmKey(x)] = 1; have[x.id] = 1; });
+            var add = gmRank(gmPure(gmDedupe(more)).filter(function (x) { return !have[x.id] && !have[gmKey(x)]; }), q);
+            add.forEach(function (x) { list.push(x); box.appendChild(gmRow(list, list.length - 1, 0)); });
+            if (GM.sel) gmSelPaint();
+            cnt.textContent = '검색 결과 ' + list.length + '곡';
+            var c = (GM.sconts || {})[q];
+            if (!c || (!c[0] && !c[1])) { done = true; tail.textContent = ''; } else tail.textContent = add.length ? '' : '';
+            if (!add.length && !done) G.setTimeout.call(W, function () { GM.moreFn && GM.moreFn(); }, 300); // 이번 묶음이 다 걸러졌으면 한 번 더
+          }, function () { busy = false; tail.textContent = ''; });
+        };
       }, fail);
     }
   }
