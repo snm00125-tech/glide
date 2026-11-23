@@ -3049,7 +3049,7 @@
       var row = G.el('div', { 'class': 'qr', role: 'button' }, [
         hd,
         G.el('img', { src: 'https://i.ytimg.com/vi/' + it.id + '/mqdefault.jpg', alt: '', loading: 'lazy' }),
-        G.el('div', { 'class': 'qt' }, [G.el('b', { text: it.title || it.id }), G.el('span', { text: it.ch || '' })]),
+        G.el('div', { 'class': 'qt' }, [QU.music ? koT(G.el('b'), it.title || it.id, it.ch) : G.el('b', { text: it.title || it.id }), G.el('span', { text: it.ch || '' })]),
         x
       ]);
       row.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); if (QU.dragged || (e.target.closest && e.target.closest('.qd'))) return; QU.items.splice(i, 1); quSend('queuePlay', { id: it.id }); quSheetClose(); quRow(); });
@@ -3896,13 +3896,14 @@
     var unq = function (x) { var u = /^['‘"“](.+)['’"”]$/.exec(x); return u ? u[1].trim() : x; };
     // '가수 - 제목', '가수 _ 제목'
     var m = /^(.{1,40}?)\s+[-–_]\s+(.+)$/.exec(t);
-    if (m) { a = m[1].trim(); t = unq(m[2].trim()); }
+    var parsed = false;
+    if (m) { a = m[1].trim(); t = unq(m[2].trim()); parsed = true; }
     else {
       // RESCENE (리센느) 'With' → 가수 RESCENE (리센느), 제목 With. 제목 안 따옴표(You’re)가 있어도 맨 끝 따옴표까지
       var q = /^(.{1,40}?)\s*['‘"“](.+)['’"”]\s*$/.exec(t);
-      if (q && q[1].trim()) { a = q[1].trim(); t = q[2].trim(); }
+      if (q && q[1].trim()) { a = q[1].trim(); t = q[2].trim(); parsed = true; }
     }
-    return { title: t || String(title || ''), artist: a };
+    return { title: t || String(title || ''), artist: a, parsed: parsed };
   }
   function gmSecs(len) { return len ? String(len).split(':').reduce(function (s, n) { return s * 60 + (+n || 0); }, 0) : 0; }
   function gmItems(json) {
@@ -3935,7 +3936,7 @@
   }
   function gmMake(id, title, ch, len, views, age) {
     var c = gmClean(title, ch);
-    var o = { id: id, title: c.title, artist: c.artist || String(ch || ''), raw: String(title || ''), ch: String(ch || ''), len: len || '', secs: gmSecs(len) };
+    var o = { id: id, title: c.title, artist: c.artist || String(ch || ''), raw: String(title || ''), ch: String(ch || ''), len: len || '', secs: gmSecs(len), ap: !!c.parsed };
     var vw = gmViews(views); if (vw >= 0) o.views = vw;
     var ag = gmAge(age); if (ag >= 0) o.age = ag;
     return o;
@@ -4049,7 +4050,7 @@
     }
     return false;
   }
-  var GM_NOISE2 = /리뷰|review|음감회|해석|tutorial|튜토리얼|강좌|배우기|다이어트|챌린지|challenge|축가|히든싱어|패러디|parody|먹방|브이로그|vlog|unboxing|언박싱|close\s?up|직캠/i;
+  var GM_NOISE2 = /의혹|표절|리뷰|review|음감회|해석|tutorial|튜토리얼|강좌|배우기|다이어트|챌린지|challenge|축가|히든싱어|패러디|parody|먹방|브이로그|vlog|unboxing|언박싱|close\s?up|직캠/i;
   var GM_VARIANT = /원곡|original song|cover|커버|\b\d{6}\b|mama|in osaka|lyrics?|가사|버전|version|award|어워즈|시상식|축하공연|festival|가요제|가요대축제|performance|퍼포먼스|\bver\b|remix|리믹스|cover|커버|inst|instrumental|orchestra|오케스트라|국악|piano|피아노|acoustic|어쿠스틱|sped|slowed|reverb|nightcore|8d|loop|반복|1시간|1hour|live|라이브|무대|stage|edit|mashup|매시업/i;
   // 검색 결과 정확도 순서: 검색어 낱말이 모두 맞는 곡만 (하나도 없으면 원래 방식), 원곡(제목이 검색어와 같음·공식 채널·Topic)이 위, 가사·커버·다른 버전은 그 아래, 뉴스·직캠은 빼거나 맨 아래
   function gmRelevance(list, q, al, strict) {
@@ -4092,11 +4093,13 @@
       var artHit = false;
       toks.forEach(function (t) { if (!isArt[t]) return; [t].concat(al[t] ? Object.keys(al[t]) : []).forEach(function (w) { if (w.length >= 2 && chRest.indexOf(w) !== -1) { chRest = chRest.split(w).join(''); artHit = true; } }); });
       if (artHit && chRest.length <= 2) sc += 4;
+      var isOff = gmOfficial(x) || (artHit && chRest.length <= 2);
       if (/vevo$|official|공식/i.test(x.ch)) sc += 2;
       if (/official\s*(audio|m\/?v|video)|\bm\/?v\b|뮤직비디오/i.test(raw)) sc += 1;
       if (x.views > 0) sc += Math.min(3, Math.max(0, Math.log(x.views) / Math.LN10 - 4)); // 많이 들은 곡이 원곡일 가능성 (10만 +1 · 100만 +2 · 1000만 +3)
       var noise = GM_NOISE.test(raw) || GM_NOISE2.test(raw); if (noise) sc -= 8;
-      return { x: x, s: sc, i: i, hit: hit, noise: noise, rest: titleQ ? rest.length : 0, vari: titleQ ? vari : false, both: titleQ && toks.every(function (t) { return isArt[t] || !al[t] || Object.keys(al[t]).some(function (k) { return gmHasW(gmWords(raw), k, {}); }) && gmHasW(gmWords(raw), t, {}); }), ar: [chN, arN, gmNorm(String(x.ch || '').replace(/\s*-\s*Topic$/i, '').replace(/\s*[\[(].*$/, ''))] };
+      if (gmOffOn() && isOff) sc += 3;
+      return { x: x, s: sc, i: i, hit: hit, noise: noise, off: isOff, rest: titleQ ? rest.length : 0, vari: titleQ ? vari : false, both: titleQ && toks.every(function (t) { return isArt[t] || !al[t] || Object.keys(al[t]).some(function (k) { return gmHasW(gmWords(raw), k, {}); }) && gmHasW(gmWords(raw), t, {}); }), ar: [chN, arN, gmNorm(String(x.ch || '').replace(/\s*-\s*Topic$/i, '').replace(/\s*[\[(].*$/, ''))] };
     });
     var full = scored.filter(function (o) { return o.hit === toks.length; });
     if (!full.length) return strict ? [] : gmRank(list, q); // 이름 짝을 못 배운 경우 등: 예전 방식 (더 불러오기는 빈 목록)
@@ -4108,6 +4111,44 @@
       var inCrew = function (o) { return o.ar.some(function (a) { if (!a) return false; for (var c in crew) if (a === c || a.indexOf(c) !== -1 || c.indexOf(a) !== -1) return true; return false; }); };
       var song = full.filter(function (o) { return inCrew(o) || o.both || o.rest <= 4; });
       if (song.length >= 3) full = song;
+    }
+    // 공식 음원 먼저: 제목(한글·영어 짝 포함)과 가수가 같은 곡의 공식본이 있을 때만 그 곡의 일반 업로드(가사 영상·다시 올린 것)를 뺌.
+    // 다른 곡·라이브·커버 같은 다른 버전·공식본이 없는 곡은 그대로 (노래가 갑자기 많이 사라지지 않게)
+    if (gmOffOn()) {
+      // 곡 이름만: 괄호(겹친 것까지)·'|' 뒤·가사/Lyrics/MV 같은 꼬리표를 걷어냄
+      var core = function (o) {
+        var t = String(o.x.title || ''), p0;
+        do { p0 = t; t = t.replace(/[(\[【「][^()\[\]【】「」]*[)\]】」]/g, ' '); } while (t !== p0);
+        return gmNorm(t.replace(/[|ㅣ].*$/, '').replace(/color\s*coded.*$|lyrics?|가사|official|audio|video|m\/?v|visualizer|\bhd\b|4k/gi, ' '));
+      };
+      var alt = function (t) { var r = {}; if (!t) return r; r[t] = 1; if (al[t]) for (var k in al[t]) r[k] = 1; return r; };
+      var aw = function (o) {
+        var r = {};
+        gmWords(String(o.x.artist || '') + ' ' + String(o.x.ch || '').replace(/\s*-\s*Topic$/i, '')).forEach(function (w) {
+          if (w.length < 2 || w === 'official' || w === 'topic') return;
+          r[w] = 1; if (al[w]) for (var k in al[w]) r[k] = 1;
+        });
+        return r;
+      };
+      var offs = full.filter(function (o) { return o.off; }).map(function (o) { return { t: alt(core(o)), a: aw(o) }; });
+      if (offs.length) {
+        var kept = full.filter(function (o) {
+          if (o.off || GM_VARIANT.test(String(o.x.raw || '').replace(/lyrics?|가사/gi, ''))) return true;
+          var ct = core(o), a = aw(o);
+          if (!ct) return true;
+          return !offs.some(function (p) {
+            // 제목에 가수 이름이 들어 있으면 떼고(그것도 같은 가수라는 뜻), 남은 것이 그 곡 이름(한글·영어 짝)뿐이면 같은 곡
+            var r = ct, inTitle = false, k;
+            for (k in p.a) if (k.length >= 2 && r.indexOf(k) !== -1) { inTitle = true; r = r.split(k).join(''); }
+            for (k in p.t) if (k) r = r.split(k).join('');
+            if (r !== '' || ct === r) return false;
+            if (inTitle) return true;
+            for (k in a) if (p.a[k]) return true;
+            return false;
+          });
+        });
+        if (kept.length) full = kept;
+      }
     }
     return full.sort(function (a, b) { return b.s - a.s || a.i - b.i; }).map(function (o) { return o.x; });
   }
@@ -4203,7 +4244,30 @@
     var a = String(it.artist || '').toLowerCase().replace(/[^0-9a-z가-힣]/g, '').slice(0, 4);
     return t + '|' + a;
   }
-  function gmDedupe(list) { var seen = {}; return (list || []).filter(function (x) { var k = gmKey(x); if (!k || k === '|' || !seen[k]) { seen[k] = 1; return true; } return false; }); }
+  // ---- 공식 음원 먼저 (설정 musicOfficial, 기본 켬, 2026-11-23 사용자: "일반 사용자가 카피한 노래 말고 원작자가 올린 것", "노래가 갑자기 많이 사라지면 안 돼") ----
+  // 모바일 검색 결과에는 공식 표시(배지)가 오지 않아 채널 이름으로 판단: '- Topic'(유튜브가 유통사 음원으로 만든 채널) · 가수 이름과 같은 채널 ·
+  // Official/VEVO/공식 · 잘 알려진 기획사·유통사. 같은 곡에 공식본이 있을 때만 일반 업로드(가사 영상·다시 올린 것)를 빼고, 공식본이 없는 곡은 그대로 둠
+  var GM_LABELS = /^(1thek|원더케이|hybelabels|bighit|smtown|jypentertainment|ygentertainment|stonemusic|geniemusic|kakaoentertainment|starship|cubeentertainment|theblacklabel|wakeone|istentertainment|woollim|pledis|belift|kqentertainment|rbw|antenna|mystic|fncent|ador|warnermusic|sonymusic|universalmusic|umg|emi|atlanticrecords|interscope|columbia|republicrecords|aomg|amoeba|ambition|p nation|pnation|cjenm|mnetkpop)/;
+  function gmOffOn() { return S().musicOfficial !== false; }
+  function gmOfficial(x) {
+    var ch = String(x.ch || ''), cn = gmNorm(ch.replace(/\s*-\s*Topic$/i, '')), an = gmNorm(x.artist);
+    if (/-\s*Topic$/i.test(ch)) return true;
+    if (/official|vevo|공식/i.test(ch)) return true;
+    if (cn && GM_LABELS.test(cn)) return true;
+    // 가수 이름과 같은 채널 (BIGBANG · 폴킴 Paul Kim — 가수 칸 'BIGBANG (빅뱅)' 처럼 한쪽이 다른 쪽을 품으면)
+    return !!(x.ap && cn.length >= 2 && an.length >= 2 && (cn === an || an.indexOf(cn) === 0 || cn.indexOf(an) === 0));
+  }
+  // 같은 곡(제목+가수)은 한 번만. 설정이 켜져 있으면 공식본을 남김 (자리는 먼저 나온 자리)
+  function gmDedupe(list) {
+    var at = {}, out = [], off = gmOffOn();
+    (list || []).forEach(function (x) {
+      var k = gmKey(x);
+      if (!k || k === '|') { out.push(x); return; }
+      if (at[k] === undefined) { at[k] = out.length; out.push(x); return; }
+      if (off && !gmOfficial(out[at[k]]) && gmOfficial(x)) out[at[k]] = x;
+    });
+    return out;
+  }
 
   // ---- 곡 메뉴 (⋮): 다음에 재생 · 맨 뒤에 추가 · 가수 노래 더 보기 ----
   // 아래 창을 아래로 밀어 닫기 (목록을 굴린 상태에서 시작한 끌기는 스크롤)
@@ -4859,6 +4923,82 @@
     b.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); fn(); }, true);
     return b;
   }
+  // ---- 영어로만 나오는 한국 곡 제목을 한글로 (2026-11-23 사용자: "소문의 낙원이 Paradise of Rumors 로 나옴") ----
+  // 유튜브 차트·Topic 음원은 유통사의 영어 제목을 씀. 유튜브 안에는 '소문의 낙원 (Paradise of Rumors)'처럼 두 이름을 함께 적은 제목이 많음
+  // → 가수 + 영어 제목으로 한 번 찾아(계정 정보 없이) 그 짝을 가수 공식 채널에서 보거나 3번 넘게 보면 한글 제목으로. 못 찾으면 영어 그대로.
+  // 찾은 결과는 두 웹뷰가 같이 보는 glide:gmKo 에 기억 (찾지 못한 곡은 7일 뒤 다시). 목록 줄은 화면에 보일 때만 찾음
+  var GM_KO = 'glide:gmKo';
+  var KO = { mem: null, memAt: 0, q: [], busy: 0, n: 0, wait: {}, obs: null };
+  function koNeed(t) { t = String(t || ''); return /[a-z]/i.test(t) && !/[가-힣]/.test(t) && t.length <= 60; }
+  function koKey(t, a) { return gmNorm(String(a || '').replace(/\s*-\s*Topic$/i, '')).slice(0, 16) + '|' + gmNorm(t); }
+  function koMap() { if (!KO.mem || Date.now() - KO.memAt > 5000) { KO.mem = gmLsGet(GM_KO) || {}; KO.memAt = Date.now(); } return KO.mem; }
+  function koGet(t, a) { if (!koNeed(t)) return null; var e = koMap()[koKey(t, a)]; return e && e.k ? e.k : null; }
+  function koShow(t, a) { return koGet(t, a) || t; }
+  function koPick(list, title, artist) {
+    var nt = gmNorm(title), na = gmNorm(String(artist || '').replace(/\s*-\s*Topic$/i, '')), cnt = {}, off = {};
+    list.forEach(function (x) {
+      var raw = String(x.raw || ''), chn = gmNorm(String(x.ch || '').replace(/\s*-\s*Topic$/i, ''));
+      var official = !!(chn && na && (chn === na || chn.indexOf(na) === 0 || na.indexOf(chn) === 0));
+      var re = /([^()\[\]【】「」|ㅣ\/:,\-–_'"‘’“”]{1,40})[(\[【]([^()\[\]【】]{1,40})[)\]】]/g, m;
+      while ((m = re.exec(raw))) {
+        var a = m[1].trim(), b = m[2].trim(), ko = null;
+        if (gmNorm(b) === nt && /[가-힣]/.test(a) && !/[a-z]/i.test(a)) ko = a;
+        else if (gmNorm(a) === nt && /[가-힣]/.test(b) && !/[a-z]/i.test(b)) ko = b;
+        if (!ko) continue;
+        ko = ko.replace(/^['‘"“\s]+|['’"”\s]+$/g, '');
+        if (!ko || ko.length > 30 || /가사|해석|자막|번역|커버|라이브|직캠|노래방|반응|모음/.test(ko)) continue;
+        cnt[ko] = (cnt[ko] || 0) + 1; if (official) off[ko] = 1;
+      }
+    });
+    // 영어 '제목'이 사실 가수 이름이면(채널 이름과 같음 — 'AKMU' → '악뮤') 바꾸지 않음
+    if (list.filter(function (x) { return gmNorm(String(x.ch || '').replace(/\s*-\s*Topic$/i, '')).indexOf(nt) === 0; }).length >= 2) return null;
+    var best = null;
+    for (var k in cnt) if ((off[k] || cnt[k] >= 3) && (!best || cnt[k] > cnt[best])) best = k;
+    return best;
+  }
+  /** 한글 제목 찾기 (기억에 있으면 바로). done(한글 제목 또는 null) */
+  function koFind(t, a, done, first) {
+    if (!koNeed(t)) return;
+    var key = koKey(t, a), e = koMap()[key];
+    if (e && (e.k || Date.now() - (e.at || 0) < 7 * 86400000)) { if (e.k && done) done(e.k); return; }
+    if (KO.wait[key]) { if (done) KO.wait[key].push(done); return; }
+    if (KO.n >= 200) return; // 한 화면에서 너무 많이 찾지 않게
+    KO.wait[key] = done ? [done] : [];
+    var job = { key: key, t: t, a: String(a || '').replace(/\s*-\s*Topic$/i, '') };
+    if (first) KO.q.unshift(job); else KO.q.push(job);
+    koPump();
+  }
+  function koPump() {
+    while (KO.busy < 2 && KO.q.length) {
+      var j = KO.q.shift(); KO.busy++; KO.n++;
+      (function (j) {
+        yti('search', { query: (j.a ? j.a + ' ' : '') + j.t, params: 'EgIQAQ%3D%3D' }).then(function (res) {
+          var k = koPick(gmItems(res).items, j.t, j.a), m = gmLsGet(GM_KO) || {};
+          m[j.key] = k ? { k: k, at: Date.now() } : { at: Date.now() };
+          var ks = Object.keys(m); if (ks.length > 5000) ks.slice(0, ks.length - 5000).forEach(function (x) { delete m[x]; });
+          gmLsSet(GM_KO, m); KO.mem = m; KO.memAt = Date.now();
+          if (k) {
+            log('info', '한글 제목: ' + j.t + ' → ' + k);
+            try { document.querySelectorAll('[data-kok]').forEach(function (el) { if (el.getAttribute('data-kok') === j.key) { el.textContent = k; el.removeAttribute('data-kok'); } }); } catch (e) { /* ignore */ }
+          }
+          (KO.wait[j.key] || []).forEach(function (fn) { try { if (k) fn(k); } catch (e) { /* ignore */ } });
+        }, function () { /* 다음에 다시 */ }).then(function () { delete KO.wait[j.key]; KO.busy--; koPump(); });
+      })(j);
+    }
+  }
+  /** 제목 칸: 한글 제목이 있으면 바로, 없으면 칸이 화면에 보일 때 찾아서 바꿈 */
+  function koT(el, t, a) {
+    var k = koGet(t, a);
+    el.textContent = k || t || '';
+    if (k || !koNeed(t)) return el;
+    var key = koKey(t, a), e = koMap()[key];
+    if (e && Date.now() - (e.at || 0) < 7 * 86400000) return el; // 찾아봤지만 없음
+    el.setAttribute('data-kok', key);
+    if (!('IntersectionObserver' in W)) { koFind(t, a); return el; }
+    if (!KO.obs) KO.obs = new IntersectionObserver(function (es) { es.forEach(function (en) { if (!en.isIntersecting) return; KO.obs.unobserve(en.target); var d = en.target._ko; if (d && en.target.getAttribute('data-kok')) koFind(d[0], d[1]); }); }, { rootMargin: '200px' });
+    el._ko = [t, a]; KO.obs.observe(el);
+    return el;
+  }
   function gmRow(list, i, rank, delta) {
     var it = list[i];
     var more = G.el('button', { type: 'button', 'aria-label': '곡 메뉴' }, [G.el('i')]);
@@ -4871,7 +5011,7 @@
     var row = G.el('div', { 'class': 'gm-row' + (GM.sel && GM.sel.ids[it.id] ? ' sel' : ''), role: 'button', 'data-gid': it.id }, [
       rank ? G.el('div', { 'class': 'gm-rank' + (rank <= 3 ? ' t' : '') }, [G.el('span', { text: String(rank) }), dl]) : null,
       G.el('div', { 'class': 'gm-art' }, [G.el('img', { src: 'https://i.ytimg.com/vi/' + it.id + '/mqdefault.jpg', alt: '', loading: i < 12 ? 'eager' : 'lazy', decoding: 'async' })]),
-      G.el('div', { 'class': 'gm-txt' }, [G.el('b', { text: it.title }), G.el('span', { text: it.artist + (it.len ? ' · ' + it.len : '') })]),
+      G.el('div', { 'class': 'gm-txt' }, [koT(G.el('b'), it.title, it.artist), G.el('span', { text: it.artist + (it.len ? ' · ' + it.len : '') })]),
       more
     ]);
     row._gmIt = it;
@@ -5006,7 +5146,7 @@
   }
   function npCard(it) {
     return G.el('div', { 'class': 'np-k np-ghost' }, [G.el('img', { alt: '', src: it && it.id ? 'https://i.ytimg.com/vi/' + it.id + '/mqdefault.jpg' : '' }),
-      G.el('div', { 'class': 'np-tx' }, [G.el('b', { text: (it && it.title) || '' }), G.el('span', { text: String((it && it.artist) || '').replace(/\s*-\s*Topic$/i, '') })])]);
+      G.el('div', { 'class': 'np-tx' }, [koT(G.el('b'), (it && it.title) || '', it && it.artist), G.el('span', { text: String((it && it.artist) || '').replace(/\s*-\s*Topic$/i, '') })])]);
   }
   function npSwipe(go) {
     var el = NP.el, x0 = 0, y0 = 0, t0 = 0, axis = '', dx = 0, dy = 0, ghost = null, gdir = 0, vx = 0, lastX = 0, lastT = 0;
@@ -5097,7 +5237,7 @@
         if (NP.img.getAttribute('src') && !NP.el.hidden) { NP.k.classList.remove('np-swap'); void NP.k.offsetWidth; NP.k.classList.add('np-swap'); }
         NP.img.setAttribute('src', src);
       }
-      NP.t.textContent = it.title || ''; NP.a.textContent = String(it.artist || '').replace(/\s*-\s*Topic$/i, '');
+      koT(NP.t, it.title || '', it.artist); NP.a.textContent = String(it.artist || '').replace(/\s*-\s*Topic$/i, '');
       NP.play.firstChild.style.webkitMaskImage = 'url("' + gmIcon(playing ? 'pause' : 'play') + '")';
       NP.play.setAttribute('aria-label', playing ? '일시정지' : '재생');
       NP.el.classList.toggle('live', npActive());
@@ -5371,11 +5511,17 @@
   })();
   function mpInfo(v) {
     var s = mpSession(), it = s && s.items.filter(function (x) { return x.id === v; })[0];
-    if (it) return it;
-    var p = mainPlayer(), d = null;
-    try { d = p && p.getVideoData && p.getVideoData(); } catch (e) { /* ignore */ }
-    var c = gmClean((d && d.title) || document.title.replace(/ - YouTube$/, ''), d && d.author);
-    return { id: v, title: c.title, artist: c.artist };
+    if (!it) {
+      var p = mainPlayer(), d = null;
+      try { d = p && p.getVideoData && p.getVideoData(); } catch (e) { /* ignore */ }
+      var c = gmClean((d && d.title) || document.title.replace(/ - YouTube$/, ''), d && d.author);
+      it = { id: v, title: c.title, artist: c.artist };
+    }
+    var k = koGet(it.title, it.artist);
+    if (k) return Object.assign({}, it, { title: k, en: it.title });
+    // 지금 곡은 바로 찾음 (찾으면 재생 화면·알림·잠금화면이 한글로)
+    if (koNeed(it.title) && role() === 'player') koFind(it.title, it.artist, function (k) { try { if (MP.title && mpVid() === v) MP.title.textContent = k; mpMediaPoke(); } catch (e) { /* ignore */ } }, true);
+    return it;
   }
   function mpCss() {
     if (document.getElementById('glide-mp-style')) return;
@@ -5735,7 +5881,7 @@
   function mpRowsOf(list, onTap) {
     recClear(MP.pv);
     list.forEach(function (x) {
-      var r = G.el('button', { type: 'button', 'class': 'prow' }, [G.el('img', { src: 'https://i.ytimg.com/vi/' + x.id + '/mqdefault.jpg', alt: '', loading: 'lazy' }), G.el('div', {}, [G.el('b', { text: x.title || '' }), G.el('span', { text: x.artist || x.ch || '' })])]);
+      var r = G.el('button', { type: 'button', 'class': 'prow' }, [G.el('img', { src: 'https://i.ytimg.com/vi/' + x.id + '/mqdefault.jpg', alt: '', loading: 'lazy' }), G.el('div', {}, [koT(G.el('b'), x.title || '', x.artist || x.ch), G.el('span', { text: x.artist || x.ch || '' })])]);
       r.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); G.send('haptic', { kind: 'gesture' }); onTap(x); }, true);
       MP.pv.appendChild(r);
     });
@@ -6188,7 +6334,7 @@
     mpPaneDraw();
     // 가운데에 '다음 곡' 목록이 보이면 아래 줄은 재생목록 전체 (같은 곡을 두 번 보여 주지 않게)
     if (MP.nx.firstChild) MP.nx.firstChild.textContent = MP.tab === 'next' && QU.items.length ? '재생목록' : '다음 곡';
-    if (MP.tab === 'next' && QU.items.length) MP.nextTitle.textContent = '전체 보기 · ' + QU.items.length + '곡'; else MP.nextTitle.textContent = QU.items.length ? (QU.items[0].title || '') + (QU.items[0].ch ? ' · ' + QU.items[0].ch : '') : (rep === 'all' && s ? '처음 곡부터 다시' : '마지막 곡이에요');
+    if (MP.tab === 'next' && QU.items.length) MP.nextTitle.textContent = '전체 보기 · ' + QU.items.length + '곡'; else MP.nextTitle.textContent = QU.items.length ? koShow(QU.items[0].title || '', QU.items[0].ch) + (QU.items[0].ch ? ' · ' + QU.items[0].ch : '') : (rep === 'all' && s ? '처음 곡부터 다시' : '마지막 곡이에요');
   }
   // ---- 들은 기록 (통계·자동 재생목록용, 이 폰에만): 실제로 30초 또는 곡의 절반을 들으면 한 번. 다시 처음부터 들으면 또 한 번 ----
   function mpLog() {
