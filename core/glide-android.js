@@ -101,11 +101,14 @@
     // 유튜브는 화면에 보일 때만 사진을 불러와서(지연 로딩) 숨기거나 1px로 두면 앱 안에서 옮겨 간 영상은 사진이 비었음 (실기). 누르면 유튜브 링크라 채널로 감
     // 영상 아래 버튼 줄: 유튜브(simplified)가 모든 버튼에 오른쪽 -7px → 좋아요·싫어요는 붙어 한 덩어리가 되지만 싫어요 끝을 공유 버튼이 덮었음 (폰: 싫어요 78~122, 공유 115~). 좋아요만 붙이고 나머지는 8px 띄움
     css += 'ytm-slim-video-action-bar-renderer .slim-video-action-bar-actions.simplified>:not(like-button-view-model):not(a):not(div):not(script){margin-right:8px!important}\n';
-    css += 'html.glide-owner ytm-slim-video-action-bar-renderer{position:relative!important}' +
+    // 좁은 화면에서는 유튜브가 싫어요를 빼고 좋아요만 둠 → 싫어요와 붙이려던 -7px 때문에 옆 버튼(장면 저장 등)과 겹쳤음 (2026-11-23 실제 사이트) → 옆에 싫어요가 없으면 띄움
+    css += 'ytm-slim-video-action-bar-renderer .slim-video-action-bar-actions.simplified>like-button-view-model:not(:has(+dislike-button-view-model)){margin-right:8px!important}\n';
+    css += 'html.glide-owner ytm-slim-video-action-bar-renderer{position:relative!important;margin-top:50px!important}' +
       'html.glide-owner ytm-slim-video-action-bar-renderer a.slim-video-owner-icon{display:block!important;position:absolute!important;left:12px!important;top:-40px!important;width:32px!important;height:32px!important;min-width:0!important;margin:0!important;padding:0!important;z-index:1!important}' +
       'html.glide-owner ytm-slim-video-action-bar-renderer a.slim-video-owner-icon *{width:32px!important;height:32px!important}#glide-owner .gw-ch img{visibility:hidden}' +
       'html.glide-owner ytm-slim-video-action-bar-renderer .slim-subscribe-button{display:none!important}' +
-      '#glide-owner{display:flex;align-items:center;gap:12px;padding:6px 12px 4px 12px}' +
+      'html:not(.glide-owner) #glide-owner{display:none!important}' +
+      '#glide-owner{position:absolute;left:0;right:0;top:-50px;height:50px;box-sizing:border-box;display:flex;align-items:center;gap:12px;padding:6px 12px 4px 12px}' +
       '#glide-owner .gw-ch{display:flex;align-items:center;gap:12px;min-width:0;flex:1;text-decoration:none;color:inherit}' +
       '#glide-owner .gw-ch img{width:32px;height:32px;border-radius:50%;flex:none;object-fit:cover;background:rgba(128,128,128,.2)}' +
       '#glide-owner .gw-ch b{font:600 14px/1.3 Roboto,"Noto Sans KR",sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}' +
@@ -563,7 +566,7 @@
   ['fullscreenchange', 'glide:fullstate', 'yt-navigate-finish'].forEach(function (n) { (n === 'fullscreenchange' ? document : W).addEventListener(n, function () { try { fsTitle(); } catch (e) { /* ignore */ } }); });
   (function fsLoop() { // 다음 영상으로 넘어가 제목이 바뀌거나 유튜브가 조작부를 다시 만든 경우
     var t = 2000;
-    try { fsTitle(); ytFsKeep(); if (inFull()) t = 800; } catch (e) { /* <html> 생기기 전(문서 시작)이면 다음에 */ }
+    try { fsTitle(); ytFsKeep(); if (inFull()) { t = 800; watchControls(); } } catch (e) { /* <html> 생기기 전(문서 시작)이면 다음에 */ }
     G.setTimeout.call(W, fsLoop, t);
   })();
   // 앱 → 페이지
@@ -1136,6 +1139,7 @@
     LK.shield.hidden = !on;
     LK.btn.hidden = true;
     if (on) { holdEnd(); T = null; showPill(); hint('화면 잠금', 900); } else { LK.pill.hidden = true; hint('잠금 해제', 700); }
+    try { updateBrBtn(); } catch (e) { /* ignore */ }
     log('info', '화면 잠금 ' + (on ? '켜짐' : '꺼짐'));
   }
   // 유튜브 조작 버튼이 보일 때(#player-control-overlay.fadein)만 자물쇠 버튼을 보임
@@ -1612,6 +1616,17 @@
     while (m.parentElement && m.parentElement !== bar) m = m.parentElement;
     return m.parentElement === bar ? m : null;
   }
+  (function ownerFast() {
+    try {
+      if (role() === 'player' && document.documentElement) {
+        var h = document.documentElement, want = onWatch() && S().enabled && !CAP;
+        if (want && location.href !== OWN.href) { OWN.href = location.href; OWN.until = Date.now() + 4000; OWN.miss = 0; h.classList.add('glide-owner'); }
+        if (!want && h.classList.contains('glide-owner')) { h.classList.remove('glide-owner'); OWN.href = ''; }
+        if (want && Date.now() < (OWN.until || 0)) ensureSaveButton();
+      }
+    } catch (e) { /* 다음에 */ }
+    G.setTimeout.call(W, ownerFast, 150);
+  })();
   function ensureSaveButton() {
     if (!onWatch() || !S().enabled || CAP) return;
     var bar = document.querySelector('ytm-slim-video-action-bar-renderer .slim-video-action-bar-actions');
@@ -1624,6 +1639,7 @@
       });
       if (slot) bar.insertBefore(b, slot); else bar.appendChild(b);
     }
+    if (!S().saveButton) { var oldSave = bar.querySelector('#glide-save-btn'); if (oldSave) oldSave.remove(); }
     // 장면 저장 (1.8.6): 지금 영상 화면을 조작 버튼 없이 사진으로 (앱이 갤러리 '사진 › Glide'에 저장)
     if (role() === 'player' && !bar.querySelector('#glide-frame-btn')) {
       var fb = chip('glide-frame-btn', '장면 저장', '지금 장면을 사진으로 저장', grabFrame);
@@ -1670,11 +1686,18 @@
   // 채널 줄: 유튜브 앱처럼 [사진 채널 이름 구독자 수 ......... 구독] 한 줄 (모바일 웹은 사진·구독 버튼이 버튼 줄 맨 앞에 끼어 있고 이름이 없음).
   // 유튜브 요소는 옮기지 않고(유튜브가 다시 그리면 깨짐) Glide 줄을 따로 만들어 보여 주고, 원래 사진·구독 버튼은 숨김.
   // 구독 버튼은 유튜브 구독 버튼을 대신 누름(구독 취소 확인 창 등 유튜브 동작 그대로). 글자·상태는 유튜브 버튼을 따라감
+  var OWN = { miss: 0, href: '' };
   function ensureOwnerRow(bar) {
     var icon = bar.querySelector('a.slim-video-owner-icon'), subWrap = bar.querySelector('.slim-subscribe-button');
     var host = bar.closest('ytm-slim-video-action-bar-renderer');
     var row = document.getElementById('glide-owner');
-    if (!icon || !host) { if (row) row.remove(); document.documentElement.classList.remove('glide-owner'); return; }
+    if (!host) return;
+    if (!icon) {
+      // 사진(채널 정보)이 끝내 없는 영상이면 비워 둔 자리를 거둠 (잠깐 빠진 것은 그대로 둠)
+      if (!row || !row.isConnected) { if (!OWN.miss) OWN.miss = Date.now(); else if (Date.now() - OWN.miss > 2500) document.documentElement.classList.remove('glide-owner'); }
+      return;
+    }
+    OWN.miss = 0;
     // '김치와 마라탕, 구독자 1.46만명. 채널로 이동합니다.' → 이름, 구독자 수 (유튜브 앱은 '1.46만'처럼 짧게)
     var m = /^(.*?),\s*구독자\s*([\d.,]+\s*[천만억]?)\s*명/.exec(icon.getAttribute('aria-label') || '');
     var en = !m && /^(.*?),\s*([\d.,]+[KMB]?)\s*subscribers/i.exec(icon.getAttribute('aria-label') || '');
@@ -1683,7 +1706,7 @@
     var img = icon.querySelector('img'), src = img && img.getAttribute('src');
     var subBtn = subWrap && subWrap.querySelector('button');
     var subText = subBtn ? (subBtn.textContent || '').trim() : '';
-    if (!row || row.nextElementSibling !== host) {
+    if (!row || row.parentNode !== host) {
       if (row) row.remove();
       var a = G.el('a', { 'class': 'gw-ch', href: icon.getAttribute('href') || '#' }, [G.el('img', { alt: '' }), G.el('b'), G.el('span')]);
       var sb = G.el('button', { type: 'button', 'class': 'gw-sub' });
@@ -1703,7 +1726,7 @@
         G.send('notifyToggle', { id: m.channelId, name: m.author || (row.querySelector('.gw-ch b') || {}).textContent || '' });
       }, true);
       row = G.el('div', { id: 'glide-owner' }, [a, bell, sb]);
-      host.parentNode.insertBefore(row, host);
+      host.insertBefore(row, host.firstChild);
     }
     var vm = curChannel();
     var bellOn = !!vm &&(S().notifyChannels || []).some(function (x) { return x && x.id === vm.channelId; });
@@ -1945,21 +1968,41 @@
     }, 300);
   }, { capture: true, passive: true });
 
+  // 홈 탭으로 (유튜브 앱처럼 탭 첫 화면에서 뒤로 가기 = 홈 탭). 아래 메뉴의 홈 칸을 누름 (앱 안 이동, 보던 자리 기억 그대로)
+  function goHomeTab() {
+    if (location.pathname === '/') return true;
+    var items = [].slice.call(document.querySelectorAll('ytm-pivot-bar-item-renderer'));
+    var home = items.filter(function (x) { return /^(홈|Home)$/.test(((x.querySelector('.pivot-bar-item-title') || {}).textContent || '').trim()); })[0] || items[0];
+    var t = home && (home.querySelector('.pivot-bar-item-tab') || home);
+    if (!t) return false;
+    t.click();
+    return true;
+  }
+  G.onCommand('goHome', function () { if (role() === 'browse') goHomeTab(); }); // 못 누르면 앱이 0.9초 뒤 홈을 바로 불러옴
   G.onCommand('closeSheet', function () {
+    // 앱은 닫기를 보내며 '닫힘'으로 바꿔 둠 → 어떤 갈래로 닫든 지금 상태를 다시 알려야 다음 뒤로 가기가 한 단계씩 감
+    // (예전: 고르기 끝·가수 화면에서 돌아가기 뒤에 알리지 않아 다음 뒤로 가기가 두 단계를 한꺼번에 건너뜀)
+    lastGeom = '';
+    G.setTimeout.call(W, function () { lastGeom = ''; reportGeom(); }, 450);
+    if (BR && BR.open) { brClose(); return; } // 전체화면 밝기 바
     if (typeof LY !== 'undefined' && LY.el) { lyClose(); return; }
     if (MP && MP.sl) { mpSleepClose(); return; }
     if (QU && QU.sheet) { quSheetClose(); return; }
     if (REC && REC.editor) { recEditorClose(); return; }
-    if (REC && REC.open) { recClose(); return; }
+    if (REC && REC.open && REC.view !== 'all') { recGo('all'); return; } // 추천의 다른 보기 → 전체 보기 먼저
+    if (REC && REC.open) { recClose(); goHomeTab(); return; } // 추천 탭 첫 화면 → 홈 탭
     if (GM && GM.menu) { gmMenuClose(); return; }
     if (GM && GM.open && GM.sel) { gmSelEnd(); return; }
+    if (GM && GM.open && GM.stack && GM.stack.length) { gmBack(); return; } // 음악 탭 안의 이전 화면 (장르 상세·검색·가수·플레이리스트)
     if (GM && GM.open && (GM.view === 'artist' || GM.view === 'pl')) { gmArtistBack(); return; }
-    if (GM && GM.open) { gmClose(); return; }
-    if (fsPanel() && fsPanelClose()) return; // 전체화면 동영상 더보기 창 (닫기 ✕가 창 밖 위 조작부에 있음)
+    if (GM && GM.open) { gmClose(); goHomeTab(); return; } // 음악 탭 첫 화면 → 홈 탭
     var open = openSheets();
-    // 앱은 닫기를 보내며 '닫힘'으로 바꿔 둠 → 창이 실제로는 안 닫혔으면(답글 화면에서 목록으로만 돌아감 등) 같은 상태라도 다시 알려야 함
-    lastGeom = '';
-    G.setTimeout.call(W, function () { lastGeom = ''; reportGeom(); }, 450);
+    // 유튜브 메뉴·대화상자가 다른 창(댓글 등) 위에 떠 있으면 그것부터 (예전: 아래 댓글 창의 닫기를 눌러 메뉴가 남았음)
+    var menuSel = '.ytSpecBottomSheetLayoutHost, .menu-container .menu-content, dialog[open]';
+    if (open.some(function (x) { try { return x.matches(menuSel); } catch (e) { return false; } }) && open.length > 1) { quCloseMenu(); return; }
+    // 전체화면 동영상 더보기 창은 그 위에 다른 창(설정·화질)이 없을 때만 먼저
+    var fpOpen = fsPanel();
+    if (fpOpen && open.length <= 1 && fsPanelClose()) return; // (닫기 ✕가 창 밖 위 조작부에 있음)
     if (!open.length) { lastGeom = ''; reportGeom(); G.send('backNext', {}); return; } // 이미 닫혀 있음 → 앱이 다음 뒤로 가기 동작을 함
     for (var i = open.length - 1; i >= 0; i--) {
       var b = open[i].querySelector('button[aria-label="닫기"], button[aria-label="Close"], button[aria-label="뒤로"], button[aria-label="Back"]');
@@ -2275,7 +2318,7 @@
     if (/^\/feed\/history/.test(p)) {
       // 링크가 아닌 길(유튜브 버튼·주소)로 들어온 경우: 유튜브 기록 화면을 보이지 않고 되돌린 뒤 Glide 기록을 엶
       document.documentElement.classList.add('glide-hist-away');
-      if (history.length > 1) history.back(); else location.replace(location.origin + '/');
+      if (Date.now() - (HI.backAt || 0) > 1500) { HI.backAt = Date.now(); if (history.length > 1) history.back(); else location.replace(location.origin + '/'); }
       hiOpen('기록 주소');
       return;
     }
@@ -2436,12 +2479,12 @@
     G.send('geom', { rect: rect, iw: innerWidth, ih: innerHeight, sheet: sheet, top: top, chat: chat, pop: pop, hold: hold, np: np, gm: gmo });
   }
   // 누른 뒤 열리는 창(댓글·설명·메뉴)을 앱이 빨리 알게: 창이 열린 직후 아래로 끌면 창 대신 영상이 작아졌음
-  W.addEventListener('click', function () { if (role() === 'player') [350, 900].forEach(function (ms) { G.setTimeout.call(W, reportGeom, ms); }); }, true);
+  W.addEventListener('click', function () { [350, 900].forEach(function (ms) { G.setTimeout.call(W, reportGeom, ms); }); }, true);
   W.addEventListener('resize', function () { G.setTimeout.call(W, reportGeom, 120); }, true);
   W.addEventListener('yt-navigate-finish', function () { G.setTimeout.call(W, reportGeom, 300); }, true);
   document.addEventListener('touchstart', function () { reportGeom(); }, { capture: true, passive: true });
   // 누른 뒤 유튜브 창(설정 메뉴 등)이 열리면 바로 알림: 앱이 가운데 영상을 풀어 창이 보이게 하고, 뒤로 가기가 그 창부터 닫게
-  document.addEventListener('click', function () { if (role() === 'player') { G.setTimeout.call(W, reportGeom, 250); G.setTimeout.call(W, reportGeom, 700); } }, { capture: true, passive: true });
+  document.addEventListener('click', function () { G.setTimeout.call(W, reportGeom, 250); G.setTimeout.call(W, reportGeom, 700); }, { capture: true, passive: true });
   document.addEventListener('playing', function () { reportGeom(); }, true);
   W.addEventListener('glide:fullstate', function () { G.setTimeout.call(W, reportGeom, 300); });
   // ===========================================================================
@@ -2742,7 +2785,7 @@
     try { b = e.target.closest(A.itemMenuButtons.concat(['button[aria-label="작업 메뉴"]']).join(',')); } catch (x) { return; }
     var info = b && quInfo(b.closest(QU_ITEM));
     // 영상이 아닌 메뉴(재생목록·채널·쇼츠 등): 앞 영상의 '다음에 재생'이 다시 쓰인 메뉴 칸에 남아 엉뚱한 영상을 넣었음 (전수조사 반영)
-    if (!info) { if (b) { QU.menuFor = null; var old = document.getElementById('glide-qnext'); if (old) old.remove(); } return; }
+    if (!info) { if (b) { QU.menuFor = null; FB.info = null; var old = document.getElementById('glide-qnext'); if (old) old.remove(); } return; }
     QU.menuFor = info; QU.menuAt = Date.now();
     quWaitMenu(0);
   }, true);
@@ -2879,7 +2922,7 @@
         if (!own._glideFb) {
           own._glideFb = d[0];
           // 유튜브 동작은 그대로 두고(계정에 알림), 누르는 순간의 영상으로 Glide 쪽도
-          own.addEventListener('click', function () { var i = FB.info; FB.info = null; if (i) G.setTimeout.call(W, function () { fbAct(own._glideFb, i); }, 0); }, true);
+          own.addEventListener('click', function () { var i = FB.info; FB.info = null; var kind = /채널|channel/i.test(own.textContent || '') ? 'channel' : 'video'; if (i) G.setTimeout.call(W, function () { fbAct(kind, i); }, 0); }, true);
         }
         return;
       }
@@ -2904,7 +2947,11 @@
     });
   }
   // 앱이 대기열을 알려 줌 (영상 웹뷰). hold: 수면 타이머 '영상 끝나면 정지' 중 (넘기지 않음)
+  // 음악·동영상 대기열은 앱이 따로 저장하고, 지금 쪽 것만 보내 줌 (music). 영상 화면의 대기열 줄·창은 받은 쪽에 그대로 고침
+  function quSend(t, d) { d = d || {}; d.music = !!QU.music; G.send(t, d); }
+  function gmQSend(t, d) { d = d || {}; d.music = true; G.send(t, d); } // 음악 탭·음악 재생 화면: 늘 음악 대기열
   G.onCommand('queue', function (arg) {
+    QU.music = !!(arg && arg.music);
     QU.items = (arg && Array.isArray(arg.items)) ? arg.items.filter(function (x) { return x && /^[\w-]{11}$/.test(x.id || ''); }) : [];
     QU.hold = !!(arg && arg.hold);
     quRow();
@@ -2914,13 +2961,13 @@
   function quAdvance(why) {
     if (role() !== 'player' || !onWatch() || CAP || G.inAd() || !S().enabled) return false;
     var cur = G.currentVideoId();
-    while (QU.items.length && QU.items[0].id === cur) G.send('queuePop', { id: QU.items.shift().id });
+    while (QU.items.length && QU.items[0].id === cur) quSend('queuePop', { id: QU.items.shift().id });
     if (!QU.items.length) { quRow(); return false; }
     var n = QU.items.shift();
     QU.advancedAt = Date.now(); // 같은 'ended' 를 음악 재생 화면이 또 처리하지 않게 (독립 검토 반영)
     log('info', '다음에 재생(' + why + '): 대기열의 다음 영상으로 [' + n.id + '] ' + (n.title || '').slice(0, 40));
-    G.send('queuePop', { id: n.id });
-    navigateTo('/watch?v=' + n.id);
+    quSend('queuePop', { id: n.id });
+    navigateTo('/watch?v=' + n.id + (QU.music || MP.on ? '&glide_music=1' : ''));
     quRow();
     return true;
   }
@@ -2980,7 +3027,7 @@
       G.setTimeout.call(W, function () { QU.dragged = false; }, 300);
       if (to !== from) {
         var x = QU.items.splice(from, 1)[0]; QU.items.splice(to, 0, x);
-        G.send('queueSet', { items: QU.items.map(function (q) { return { id: q.id, title: q.title, ch: q.ch }; }) });
+        quSend('queueSet', { items: QU.items.map(function (q) { return { id: q.id, title: q.title, ch: q.ch }; }) });
       }
       quSheet(); quRow();
     };
@@ -2994,7 +3041,7 @@
     var list = G.el('div', { 'class': 'ql' });
     QU.items.forEach(function (it, i) {
       var x = G.el('button', { type: 'button', 'class': 'qx', 'aria-label': (it.title || '') + ' 빼기', text: '✕' });
-      x.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); QU.items.splice(i, 1); G.send('queueRemove', { id: it.id }); quRow(); quSheet(); });
+      x.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); QU.items.splice(i, 1); quSend('queueRemove', { id: it.id }); quRow(); quSheet(); });
       var hd = G.el('div', { 'class': 'qd', 'aria-label': '끌어서 순서 바꾸기' }, [G.el('i')]);
       var row = G.el('div', { 'class': 'qr', role: 'button' }, [
         hd,
@@ -3002,12 +3049,12 @@
         G.el('div', { 'class': 'qt' }, [G.el('b', { text: it.title || it.id }), G.el('span', { text: it.ch || '' })]),
         x
       ]);
-      row.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); if (QU.dragged) return; QU.items.splice(i, 1); G.send('queuePlay', { id: it.id }); quSheetClose(); quRow(); });
+      row.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); if (QU.dragged || (e.target.closest && e.target.closest('.qd'))) return; QU.items.splice(i, 1); quSend('queuePlay', { id: it.id }); quSheetClose(); quRow(); });
       hd.addEventListener('touchstart', function (e) { e.stopPropagation(); quDrag(e, row, i, list); }, { capture: true, passive: true });
       list.appendChild(row);
     });
     var clear = G.el('button', { type: 'button', 'class': 'qc', text: '모두 지우기' });
-    clear.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); QU.items = []; G.send('queueClear', {}); quSheetClose(); quRow(); });
+    clear.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); QU.items = []; quSend('queueClear', {}); quSheetClose(); quRow(); });
     var close = G.el('button', { type: 'button', 'class': 'qz', 'aria-label': '닫기', text: '✕' });
     close.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); quSheetClose(); });
     QU.sheet = G.el('div', { id: 'glide-qsheet', role: 'dialog', 'aria-label': '다음에 재생' }, [
@@ -3264,6 +3311,7 @@
       for (i = 0; i < Math.min(3, cands.length); i++) pick.push(cands[(REC.moreIdx + i) % cands.length]);
       REC.moreIdx += pick.length;
     }
+    var view0 = REC.view, list0 = REC.moreList;
     Promise.all(pick.map(function (s) {
       return yti('search', { continuation: s.cont }).then(function (j) { var r = recItems(j); return { tag: s.tag, items: r.items, cont: r.cont, src: s }; })
         .catch(function () { return { tag: s.tag, items: [], cont: null, src: s }; });
@@ -3277,7 +3325,7 @@
       REC.moreBusy = false;
       // 지금 보기의 목록 끝에 붙임
       var list = REC.moreList;
-      if (list) (REC.view === 'all' ? add : REC.all.slice(before).filter(recInView)).forEach(function (it) { list.appendChild(recBig(it, REC.view === 'all')); });
+      if (list && list === list0 && REC.view === view0) (REC.view === 'all' ? add : REC.all.slice(before).filter(recInView)).forEach(function (it) { list.appendChild(recBig(it, REC.view === 'all')); });
       if (REC.more) REC.more.textContent = '';
     });
   }
@@ -3948,7 +3996,7 @@
     G.send('haptic', { kind: 'gesture' });
     // 영상 열기를 먼저 보냄: 대기열이 먼저 가면 영상 웹뷰가 아직 예전(음악 아닌) 영상일 때 '음악 대기열 비우기'에 걸렸음 (독립 검토 반영)
     G.send('openVideo', { url: location.origin + '/watch?v=' + order[0].id + '&glide_music=1' });
-    G.send('queueSet', { items: order.slice(1).map(function (x) { return { id: x.id, title: x.title, ch: x.artist }; }) });
+    gmQSend('queueSet', { items: order.slice(1).map(function (x) { return { id: x.id, title: x.title, ch: x.artist }; }) });
     log('info', '음악 재생: ' + order[0].title + ' 외 ' + (order.length - 1) + '곡' + (shuffle ? ' (셔플)' : ''));
   }
   function gmRecentAdd(it) {
@@ -3986,6 +4034,7 @@
       y0 = e.touches[0].clientY; sh.style.transition = 'none';
     }, { passive: true });
     sh.addEventListener('touchmove', function (e) { if (y0 === null) return; var dy = Math.max(0, e.touches[0].clientY - y0); sh.style.transform = 'translateY(' + dy + 'px)'; }, { passive: true });
+    sh.addEventListener('touchcancel', function () { y0 = null; sh.style.transition = ''; sh.style.transform = ''; }, { passive: true });
     sh.addEventListener('touchend', function (e) {
       if (y0 === null) return;
       var dy = (e.changedTouches[0] || {}).clientY - y0; y0 = null; sh.style.transition = ''; sh.style.transform = '';
@@ -4011,8 +4060,8 @@
       G.el('div', { 'class': 'gm-sg' }),
       G.el('div', { 'class': 'gm-sh' }, [G.el('img', { src: 'https://i.ytimg.com/vi/' + it.id + '/mqdefault.jpg', alt: '' }), G.el('div', {}, [G.el('b', { text: it.title }), G.el('span', { text: it.artist || '' })])]),
       mk('play', '바로 듣기', function () { gmPlay([it], 0, false); }),
-      mk('list', '다음에 재생', function () { G.send('queueAdd', Object.assign({ front: true }, q)); }),
-      mk('add', '맨 뒤에 추가 (재생 대기열)', function () { G.send('queueAdd', q); }),
+      mk('list', '다음에 재생', function () { gmQSend('queueAdd', Object.assign({ front: true }, q)); }),
+      mk('add', '맨 뒤에 추가 (재생 대기열)', function () { gmQSend('queueAdd', q); }),
       mk('add', '플레이리스트에 담기', function () { plPick([it]); }),
       it.artist ? mk('person', it.artist + ' 노래 더 보기', function () { gmArtist(it.artist); }) : null,
       mk('video', '뮤직비디오 보기', function () { G.send('openVideo', { url: location.origin + '/watch?v=' + it.id + '&glide_mv=1' }); }),
@@ -4028,13 +4077,22 @@
   }
 
   // ---- 가수 화면: 인기곡 · 최신곡 ----
+  function gmSnap() { return { view: GM.view, genre: GM.genre, q: GM.q, plId: GM.plId, artist: GM.artist, aTab: GM.aTab, y: GM.el ? GM.el.scrollTop : 0 }; }
+  function gmPush() { if (!GM.open) { GM.stack = []; GM.fromOut = true; return; } GM.fromOut = false; (GM.stack = GM.stack || []).push(gmSnap()); if (GM.stack.length > 20) GM.stack.shift(); }
+  function gmBack() {
+    var st = GM.stack && GM.stack.pop(); if (!st) return false;
+    var y = st.y; delete st.y; for (var k in st) GM[k] = st[k];
+    gmRender(); if (GM.el) GM.el.scrollTop = y || 0;
+    return true;
+  }
   function gmArtist(name) {
+    gmPush();
     if (GM.view !== 'artist') GM.prevView = GM.view;
     GM.view = 'artist'; GM.artist = name; GM.aTab = 'top';
     if (!GM.open) gmOpen(); else { gmRender(); GM.el.scrollTop = 0; }
   }
   G.onCommand('musicArtist', function (a) { if (a && a.name && gmOn()) gmArtist(String(a.name).slice(0, 80)); });
-  function gmArtistBack() { GM.view = GM.prevView && GM.prevView !== 'artist' && GM.prevView !== 'pl' ? GM.prevView : (GM.view === 'pl' ? 'mine' : 'chart'); gmRender(); GM.el.scrollTop = 0; }
+  function gmArtistBack() { if (gmBack()) return; if (GM.fromOut) { GM.fromOut = false; gmClose(); return; } /* 재생 화면에서 가수를 열었으면 뒤로 = 원래 화면 */ GM.view = GM.prevView && GM.prevView !== 'artist' && GM.prevView !== 'pl' ? GM.prevView : (GM.view === 'pl' ? 'mine' : 'chart'); gmRender(); GM.el.scrollTop = 0; }
   function gmNorm(s) { return String(s || '').toLowerCase().replace(/[^0-9a-z가-힣]/g, ''); }
   function gmByArtist(list, name) {
     var n = gmNorm(name).slice(0, 6), mine = list.filter(function (x) { return n && (gmNorm(x.artist).indexOf(n) >= 0 || gmNorm(x.title).indexOf(n) >= 0); });
@@ -4279,7 +4337,7 @@
     });
     body.appendChild(grid);
   }
-  function plOpen(id) { if (GM.view !== 'pl') GM.prevView = GM.view; GM.view = 'pl'; GM.plId = id; if (!GM.open) gmOpen(); else { gmRender(); GM.el.scrollTop = 0; } }
+  function plOpen(id) { gmPush(); if (GM.view !== 'pl') GM.prevView = GM.view; GM.view = 'pl'; GM.plId = id; if (!GM.open) gmOpen(); else { gmRender(); GM.el.scrollTop = 0; } }
   // 플레이리스트 화면: 표지·이름·곡 수·시간, 전체 듣기·셔플·⋮(이름 바꾸기·삭제), 곡은 ≡ 끌어 순서 바꾸기 · ⋮ 빼기
   function plView(body) {
     var p = plGet(GM.plId);
@@ -4434,7 +4492,11 @@
       '.gm-sacts{display:flex;gap:8px;overflow-x:auto;padding:0 16px;scrollbar-width:none}.gm-sacts::-webkit-scrollbar{display:none}' +
       '.gm-sa{all:unset;flex:none;display:flex;align-items:center;gap:6px;padding:9px 14px;border-radius:20px;background:' + CH + ';color:' + T1 + ';font:700 13px/1 ' + F + ';cursor:pointer;transition:transform .15s}.gm-sa:active{transform:scale(.95)}' +
       '.gm-sa i{width:16px;height:16px;background-color:currentColor;-webkit-mask:center/16px 16px no-repeat}.gm-sa.p{background:' + AC + ';color:#fff}.gm-sa.red{color:#ff5a5f}' +
-      '#glide-np{position:fixed;left:8px;right:8px;z-index:3;display:flex;align-items:center;gap:4px;height:60px;padding:0 6px 0 8px;border-radius:14px;background:linear-gradient(' + CH + ',' + CH + '),' + BG + ';color:' + T1 + ';box-shadow:0 8px 24px rgba(0,0,0,.28),0 0 0 1px rgba(128,128,128,.14);overflow:hidden;font-family:' + F + ';cursor:pointer;-webkit-tap-highlight-color:transparent;animation:gmup .26s cubic-bezier(.2,0,0,1) both}' +
+      '#glide-np{position:fixed;left:8px;right:8px;z-index:3;display:flex;align-items:center;gap:4px;height:60px;padding:0 6px 0 8px;border-radius:14px;background:linear-gradient(' + CH + ',' + CH + '),' + BG + ';color:' + T1 + ';box-shadow:0 8px 24px rgba(0,0,0,.28),0 0 0 1px rgba(128,128,128,.14);overflow:hidden;font-family:' + F + ';cursor:pointer;-webkit-tap-highlight-color:transparent;will-change:transform}' +
+      '#glide-np.np-in{animation:npin .32s cubic-bezier(.05,.7,.1,1) both}@keyframes npin{from{transform:translate3d(0,22px,0) scale(.97);opacity:0}}' +
+      '#glide-np .np-v{position:relative;flex:1;min-width:0;align-self:stretch;overflow:hidden}' +
+      '#glide-np .np-k{position:absolute;inset:0;display:flex;align-items:center;will-change:transform}' +
+      '#glide-np .np-k.np-swap{animation:npsw .28s cubic-bezier(.2,.9,.25,1) both}@keyframes npsw{from{transform:translate3d(14px,0,0);opacity:0}}' +
       '#glide-np[hidden]{display:none}' +
       '#glide-np img{flex:none;width:44px;height:44px;border-radius:8px;object-fit:cover;background:rgba(128,128,128,.3)}' +
       '#glide-np .np-tx{flex:1;min-width:0;margin-left:8px}#glide-np .np-tx b{display:block;font:700 14.5px/1.3 ' + F + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#glide-np .np-tx span{display:block;margin-top:2px;font:400 12.5px/1.3 ' + F + ';opacity:.65;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
@@ -4467,7 +4529,7 @@
     if (GM.el && GM.el.isConnected) return;
     gmCss();
     var input = G.el('input', { type: 'search', placeholder: '노래, 가수 검색', enterkeyhint: 'search' });
-    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); var q = input.value.trim(); if (q) { GM.q = q; GM.view = 'search'; input.blur(); gmRender(); } } });
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); var q = input.value.trim(); if (q) { gmPush(); GM.q = q; GM.view = 'search'; input.blur(); gmRender(); } } });
     GM.top = G.el('div', { 'class': 'gm-top' }, [
       G.el('div', { 'class': 'gm-brand' }, [G.el('b', {}, ['Glide ', G.el('span', { text: 'Music' })]), G.el('label', { 'class': 'gm-search' }, [G.el('i'), input])]),
       G.el('div', { 'class': 'gm-tabs' })
@@ -4515,6 +4577,7 @@
   function gmClose() {
     if (!GM.open) return;
     gmSelEnd();
+    GM.stack = [];
     GM.open = false;
     npDraw();
     if (GM.el) { GM.keepTop = GM.el.scrollTop; GM.el.hidden = true; }
@@ -4558,10 +4621,11 @@
     return row;
   }
   // ---- 여러 곡 고르기: 길게 누르면 시작, 위에 버튼 줄(플레이리스트에 담기·재생·다음에 재생·맨 뒤에 추가·빼기) ----
+  function gmSelKey() { return [GM.view, GM.plId, GM.chart, GM.year, GM.genre, GM.q, GM.artist, GM.aTab].join(':'); }
   function gmSelToggle(it) {
     if (!GM.el) return;
     G.send('haptic', { kind: 'gesture' });
-    if (!GM.sel) GM.sel = { ids: {}, view: GM.view + ':' + (GM.plId || '') };
+    if (!GM.sel) GM.sel = { ids: {}, view: gmSelKey() };
     if (GM.sel.ids[it.id]) delete GM.sel.ids[it.id]; else GM.sel.ids[it.id] = it;
     if (!Object.keys(GM.sel.ids).length) { gmSelEnd(); return; }
     gmSelPaint();
@@ -4606,8 +4670,8 @@
       var acts = G.el('div', { 'class': 'gm-sacts' }, [
         act('p', 'add', '플레이리스트에 담기', function (items) { plPick(items, gmSelEnd); }),
         act('', 'play', '재생', function (items) { gmSelEnd(); gmPlay(items, 0, false); }),
-        act('', 'list', '다음에 재생', function (items) { items.slice().reverse().forEach(function (x) { G.send('queueAdd', Object.assign({ front: true }, q(x))); }); gmSelEnd(); gmToast(items.length + '곡을 다음에 재생해요'); }),
-        act('', 'add', '맨 뒤에 추가', function (items) { items.forEach(function (x) { G.send('queueAdd', q(x)); }); gmSelEnd(); gmToast(items.length + '곡을 재생 대기열 맨 뒤에 추가했어요'); }),
+        act('', 'list', '다음에 재생', function (items) { if (!npActive()) { gmSelEnd(); gmPlay(items, 0, false); return; } items.slice().reverse().forEach(function (x) { gmQSend('queueAdd', Object.assign({ front: true }, q(x))); }); gmSelEnd(); gmToast(items.length + '곡을 다음에 재생해요'); }),
+        act('', 'add', '맨 뒤에 추가', function (items) { if (!npActive()) { gmSelEnd(); gmPlay(items, 0, false); return; } items.forEach(function (x) { gmQSend('queueAdd', q(x)); }); gmSelEnd(); gmToast(items.length + '곡을 재생 대기열 맨 뒤에 추가했어요'); }),
         GM.view === 'pl' && GM.plId ? act('red', 'close', '빼기', function (items) {
           var p = plGet(GM.plId); if (!p) return; var del = {}; items.forEach(function (x) { del[x.id] = 1; });
           p.items = p.items.filter(function (x) { return !del[x.id]; }); plPut(p); gmSelEnd(); var keep = GM.el.scrollTop; gmRender(); GM.el.scrollTop = keep; gmToast(items.length + '곡을 뺐어요');
@@ -4650,10 +4714,12 @@
     };
     NP.img = G.el('img', { alt: '' });
     NP.t = G.el('b'); NP.a = G.el('span');
+    NP.k = G.el('div', { 'class': 'np-k' }, [NP.img, G.el('div', { 'class': 'np-tx' }, [NP.t, NP.a])]);
+    NP.v = G.el('div', { 'class': 'np-v' }, [NP.k]);
     NP.play = btn('play', '재생', function () { if (npActive()) G.send('musicCtl', { cmd: 'toggle' }); else go('here'); });
     NP.bar = G.el('i', { 'class': 'np-pg' });
     NP.el = G.el('div', { id: 'glide-np', role: 'button', 'data-glide': 'music', hidden: '' }, [
-      NP.img, G.el('div', { 'class': 'np-tx' }, [NP.t, NP.a]),
+      NP.v,
       btn('prev', '이전 곡', function () { go('prev'); }), NP.play, btn('next', '다음 곡', function () { go('next'); }),
       G.el('div', { 'class': 'np-tr' }, [NP.bar])
     ]);
@@ -4661,51 +4727,87 @@
     NP.el.addEventListener('click', function (e) { if (NP.swiped) { e.preventDefault(); e.stopPropagation(); return; } if (e.target.closest && e.target.closest('button')) return; e.preventDefault(); e.stopPropagation(); G.send('haptic', { kind: 'gesture' }); if (npActive()) G.send('musicCtl', { cmd: 'expand' }); else go('here'); }, true);
     document.body.appendChild(NP.el);
   }
+  // 옆 곡 (밀 때 미리 보이는 칸): 음악 세션의 다음·이전 곡 (모르면 빈 칸)
+  function npNeighbor(next) {
+    var s = gmLsGet(GM_KEY), items = s && s.items || [];
+    var cur = npActive() ? NP.d.vid : (npLast() || { list: [{}], i: 0 }).list[(npLast() || { i: 0 }).i].id;
+    if (next) { var i = items.map(function (x) { return x.id; }).indexOf(cur); return i >= 0 && items[i + 1] ? items[i + 1] : (gmLsGet('glide:gmRepeat') !== 'off' && items[0] && items[0].id !== cur ? items[0] : null); }
+    var pl = (s && s.played || []).slice(); if (pl.length && pl[pl.length - 1] === cur) pl.pop();
+    var pid = pl.pop(); return pid ? items.filter(function (x) { return x.id === pid; })[0] || { id: pid, title: '', artist: '' } : null;
+  }
+  function npCard(it) {
+    return G.el('div', { 'class': 'np-k np-ghost' }, [G.el('img', { alt: '', src: it && it.id ? 'https://i.ytimg.com/vi/' + it.id + '/mqdefault.jpg' : '' }),
+      G.el('div', { 'class': 'np-tx' }, [G.el('b', { text: (it && it.title) || '' }), G.el('span', { text: String((it && it.artist) || '').replace(/\s*-\s*Topic$/i, '') })])]);
+  }
   function npSwipe(go) {
-    var el = NP.el, x0 = 0, y0 = 0, t0 = 0, axis = '', dx = 0, dy = 0;
+    var el = NP.el, x0 = 0, y0 = 0, t0 = 0, axis = '', dx = 0, dy = 0, ghost = null, gdir = 0, vx = 0, lastX = 0, lastT = 0;
+    var EASE = 'cubic-bezier(.2,.9,.25,1)';
+    var setK = function (x, ms) { NP.k.style.transition = ms ? 'transform ' + ms + 'ms ' + EASE + ',opacity ' + ms + 'ms' : 'none'; NP.k.style.transform = x ? 'translate3d(' + x + 'px,0,0)' : ''; };
+    var setG = function (x, ms) { if (!ghost) return; ghost.style.transition = ms ? 'transform ' + ms + 'ms ' + EASE : 'none'; ghost.style.transform = 'translate3d(' + x + 'px,0,0)'; };
+    var dropGhost = function () { if (ghost) { ghost.remove(); ghost = null; gdir = 0; } };
+    var setBar = function (tf, op, ms) { el.style.transition = ms ? 'transform ' + ms + 'ms ' + EASE + ',opacity ' + ms + 'ms' : 'none'; el.style.transform = tf || ''; el.style.opacity = op === undefined ? '' : String(op); };
+    var W0 = function () { return NP.v.getBoundingClientRect().width || 240; };
+    var anim = function () {};
+    var reset = function () { setBar('', undefined, 0); setK(0, 0); dropGhost(); };
     var anim = function (tf, op, ms, then) { el.style.transition = 'transform ' + ms + 'ms cubic-bezier(.2,0,0,1),opacity ' + ms + 'ms'; el.style.transform = tf; el.style.opacity = op; if (then) G.setTimeout.call(W, then, ms); };
     var reset = function () { el.style.transition = 'none'; el.style.transform = ''; el.style.opacity = ''; };
     el.addEventListener('touchstart', function (e) {
       var t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; t0 = Date.now(); axis = ''; dx = dy = 0; NP.swiped = false;
       GM.dragging = true; lastPull = null; reportPull(); // 아래로 밀 때 앱의 당겨서 새로고침이 끼어들지 않게
-      el.style.transition = 'none';
+      lastX = t.clientX; lastT = t0; vx = 0;
     }, { passive: true });
     el.addEventListener('touchmove', function (e) {
       var t = e.touches[0]; dx = t.clientX - x0; dy = t.clientY - y0;
       if (!axis) { if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return; axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'; NP.swiped = true; }
       if (e.cancelable) e.preventDefault();
-      if (axis === 'x') { el.style.transform = 'translateX(' + dx + 'px)'; el.style.opacity = String(Math.max(.35, 1 - Math.abs(dx) / 320)); }
-      else if (dy > 0) { el.style.transform = 'translateY(' + dy + 'px)'; el.style.opacity = String(Math.max(.2, 1 - dy / 160)); }
-      else el.style.transform = 'translateY(' + (dy * 0.35) + 'px)';
+      var now = Date.now(); if (now > lastT) { vx = 0.7 * vx + 0.3 * ((t.clientX - lastX) / (now - lastT)); lastX = t.clientX; lastT = now; }
+      if (axis === 'x') {
+        var w = W0(), dir = dx < 0 ? 1 : -1; // 1: 다음 곡이 오른쪽에서
+        if (dir !== gdir) { dropGhost(); var nb = npNeighbor(dir === 1); if (!nb && dir === -1) nb = { id: NP.cur || '', title: NP.t.textContent, artist: NP.a.textContent }; /* 앞 곡이 없으면 이전 = 이 곡 처음부터 (재생 화면 ⏮와 같음) */ ghost = npCard(nb); NP.v.appendChild(ghost); gdir = dir; ghost.dataset.has = nb ? '1' : ''; }
+        var x = ghost.dataset.has ? dx : dx * 0.35; // 옆 곡이 없으면 고무줄처럼 덜 따라옴
+        setK(x, 0); setG(x + dir * (w + 16), 0);
+      } else if (dy > 0) setBar('translate3d(0,' + dy + 'px,0)', Math.max(0.25, 1 - dy / 220), 0);
+      else setBar('translate3d(0,' + (-Math.pow(-dy, 0.7)) + 'px,0)', undefined, 0); // 위로는 저항
     }, { passive: false });
     var end = function () {
       GM.dragging = false; lastPull = null; reportPull();
       if (!axis) return;
       var v = Math.max(Math.abs(dx), Math.abs(dy)) / Math.max(1, Date.now() - t0);
-      if (axis === 'x' && (Math.abs(dx) > 80 || (Math.abs(dx) > 36 && v > 0.5))) {
-        var next = dx < 0, w = innerWidth;
+      var w = W0();
+      var fling = Math.abs(vx) > 0.45 && Math.sign(vx) === Math.sign(dx);
+      if (axis === 'x' && ghost && ghost.dataset.has && (Math.abs(dx) > w * 0.35 || (Math.abs(dx) > 24 && fling))) {
+        var next = dx < 0, rest = w - Math.abs(dx);
+        // 남은 거리를 손가락 속도에 맞춰 (빠르게 튕기면 짧게) — 상용 앱처럼 감속하며 자리 잡음
+        var ms = Math.round(Math.max(170, Math.min(320, rest / Math.max(0.9, Math.abs(vx)))));
         G.send('haptic', { kind: 'gesture' });
-        anim('translateX(' + (next ? -w : w) + 'px)', '0', 160, function () {
-          go(next ? 'next' : 'prev');
-          // 새 곡이 반대쪽에서 들어옴
-          el.style.transition = 'none'; el.style.transform = 'translateX(' + (next ? w * 0.4 : -w * 0.4) + 'px)'; el.style.opacity = '0';
-          void el.offsetWidth; anim('translateX(0)', '1', 220, function () { reset(); });
-        });
+        setK(next ? -(w + 16) : w + 16, ms); setG(0, ms);
+        var g = ghost; ghost = null; gdir = 0;
+        G.setTimeout.call(W, function () {
+          // 새 곡 칸이 제자리 → 원래 칸에 새 곡 내용을 넣고 바꿔치기 (깜빡임 없게)
+          NP.img.setAttribute('src', g.querySelector('img').getAttribute('src') || ''); NP.t.textContent = g.querySelector('b').textContent; NP.a.textContent = g.querySelector('span').textContent;
+          setK(0, 0); g.remove();
+        }, ms);
+        go(next ? 'next' : 'prev');
+        if (npActive()) { var was = NP.d.vid; G.setTimeout.call(W, function () { if (npActive() && NP.d.vid === was) { NP.img.removeAttribute('src'); npDraw(); } }, 1500); } // 안 넘어갔으면 원래 곡으로
         log('info', '음악 막대: ' + (next ? '왼쪽 밀기 → 다음 곡' : '오른쪽 밀기 → 이전 곡'));
+      } else if (axis === 'x') {
+        // 덜 밀었음: 감속하며 제자리로
+        setK(0, 240); setG(gdir * (w + 16), 240); G.setTimeout.call(W, dropGhost, 250);
       } else if (axis === 'y' && dy < -40) {
         G.send('haptic', { kind: 'gesture' });
-        anim('translateY(-12px)', '1', 120, function () { reset(); });
+        setBar('', undefined, 220);
         if (npActive()) G.send('musicCtl', { cmd: 'expand' }); else go('here');
         log('info', '음악 막대: 위로 밀기 → 재생 화면');
       } else if (axis === 'y' && (dy > 60 || (dy > 30 && v > 0.5))) {
         G.send('haptic', { kind: 'gesture' });
-        anim('translateY(120%)', '0', 180, function () {
+        setBar('translate3d(0,' + (el.getBoundingClientRect().height + 24) + 'px,0)', 0, 200);
+        G.setTimeout.call(W, function () {
           NP.dismissed = true; NP.gone = npActive() ? NP.d.vid : '';
           if (npActive()) G.send('musicCtl', { cmd: 'close' });
           reset(); npDraw();
-        });
+        }, 200);
         log('info', '음악 막대: 아래로 밀기 → 막대 치우고 끔');
-      } else anim('', '', 180, function () { reset(); });
+      } else setBar('', undefined, 260); // 제자리로
       G.setTimeout.call(W, function () { NP.swiped = false; }, 350);
     };
     el.addEventListener('touchend', end, { passive: true });
@@ -4720,7 +4822,12 @@
     if (show) {
       npBuild();
       var src = 'https://i.ytimg.com/vi/' + it.id + '/mqdefault.jpg';
-      if (NP.img.getAttribute('src') !== src) NP.img.setAttribute('src', src);
+      NP.cur = it.id;
+      if (NP.img.getAttribute('src') !== src) {
+        // 버튼·이어폰으로 곡이 바뀜: 곡 칸만 살짝 밀리며 바뀜 (밀기로 이미 바꿔 둔 경우는 그대로)
+        if (NP.img.getAttribute('src') && !NP.el.hidden) { NP.k.classList.remove('np-swap'); void NP.k.offsetWidth; NP.k.classList.add('np-swap'); }
+        NP.img.setAttribute('src', src);
+      }
       NP.t.textContent = it.title || ''; NP.a.textContent = String(it.artist || '').replace(/\s*-\s*Topic$/i, '');
       NP.play.firstChild.style.webkitMaskImage = 'url("' + gmIcon(playing ? 'pause' : 'play') + '")';
       NP.play.setAttribute('aria-label', playing ? '일시정지' : '재생');
@@ -4728,7 +4835,10 @@
       NP.el.style.bottom = (gmBars()[1] + 8) + 'px';
       npProgress();
     }
-    if (NP.el) NP.el.hidden = !show;
+    if (NP.el) {
+      if (show && NP.el.hidden) { NP.el.classList.remove('np-in'); void NP.el.offsetWidth; NP.el.classList.add('np-in'); }
+      NP.el.hidden = !show;
+    }
     if (show !== NP.shown) { NP.shown = show; GM.el.classList.toggle('np-on', show); }
     // 앱에 '막대가 지금 곡을 맡음'(작은 플레이어 숨김)을 알림: 보임이 바뀔 때뿐 아니라 듣기 시작·끝날 때도
     var npOn = show && npActive(); if (npOn !== NP.on) { NP.on = npOn; lastGeom = ''; reportGeom(); }
@@ -4775,12 +4885,12 @@
   }
   function gmRender() {
     if (!GM.el) return;
-    if (GM.sel && GM.sel.view !== GM.view + ':' + (GM.plId || '')) gmSelEnd();
+    if (GM.sel && GM.sel.view !== gmSelKey()) gmSelEnd();
     var tabs = GM.top.querySelector('.gm-tabs');
     recClear(tabs);
     GM_VIEWS.forEach(function (v) {
       var b = G.el('button', { type: 'button', 'aria-pressed': String(GM.view === v[0] || (GM.view === 'search' && false)), text: v[1] });
-      b.addEventListener('click', function (e) { e.preventDefault(); GM.view = v[0]; GM.genre = ''; gmRender(); GM.el.scrollTop = 0; }, true);
+      b.addEventListener('click', function (e) { e.preventDefault(); GM.stack = []; GM.view = v[0]; GM.genre = ''; gmRender(); GM.el.scrollTop = 0; }, true);
       tabs.appendChild(b);
     });
     recClear(GM.body);
@@ -4837,7 +4947,7 @@
         var grid = G.el('div', { 'class': 'gm-grid' });
         GM_GENRES.forEach(function (g) {
           var b = G.el('button', { type: 'button', style: 'background:linear-gradient(135deg,' + g[1] + ',rgba(0,0,0,.35))', text: g[0] });
-          b.addEventListener('click', function (e) { e.preventDefault(); GM.genre = g[0]; gmRender(); GM.el.scrollTop = 0; }, true);
+          b.addEventListener('click', function (e) { e.preventDefault(); gmPush(); GM.genre = g[0]; gmRender(); GM.el.scrollTop = 0; }, true);
           grid.appendChild(b);
         });
         body.appendChild(grid);
@@ -5121,6 +5231,7 @@
     var seekAt = function (x) { var r = MP.bar.getBoundingClientRect(), v = mpVideo(); if (!v || !isFinite(v.duration)) return; var f = Math.max(0, Math.min(1, (x - r.left) / r.width)); MP.seekTo = f * v.duration; mpDraw(MP.seekTo, v.duration); };
     MP.bar.addEventListener('touchstart', function (e) { e.stopPropagation(); MP.drag = true; seekAt(e.touches[0].clientX); }, { capture: true, passive: true });
     MP.bar.addEventListener('touchmove', function (e) { e.stopPropagation(); if (e.cancelable) e.preventDefault(); seekAt(e.touches[0].clientX); }, { capture: true, passive: false });
+    MP.bar.addEventListener('touchcancel', function () { MP.drag = false; MP.seekTo = null; }, { capture: true, passive: true });
     MP.bar.addEventListener('touchend', function (e) { e.stopPropagation(); MP.drag = false; var v = mpVideo(); if (v && MP.seekTo != null) v.currentTime = MP.seekTo; MP.seekTo = null; }, { capture: true, passive: true });
     // 재생 화면 위 터치가 유튜브 조작부·손동작(두 번 탭·길게 누르기)으로 가지 않게
     ['click', 'dblclick', 'pointerdown', 'pointerup'].forEach(function (t) { MP.el.addEventListener(t, function (e) { e.stopPropagation(); }, false); });
@@ -5218,6 +5329,7 @@
     gmToastPlayer('비슷한 곡을 찾는 중…');
     // 유튜브 '믹스'(RD+영상 ID: 이 곡으로 만드는 음악 라디오). 관련 영상은 예능·브이로그가 섞여(폰 확인) 쓰지 않음
     yti('next', { videoId: v, playlistId: 'RD' + v }).then(function (j) {
+      if (mpVid() !== v) return; // 기다리는 동안 다른 곡으로 넘어감
       var cur = mpInfo(v), seen = {}, ct = gmNorm(cur.title);
       seen[gmKey(cur)] = 1;
       // 응답에는 믹스 목록(playlistPanelRenderer)과 관련 영상(예능·브이로그 섞임)이 같이 옴 → 믹스 목록만
@@ -5232,7 +5344,7 @@
       var pick = function (x) { return { id: x.id, title: x.title, artist: x.artist }; };
       s.items = [pick(cur)].concat(list.map(pick)); s.orig = s.items.slice(); s.shuffle = false; s.at = Date.now();
       gmLsSet(GM_KEY, s);
-      G.send('queueSet', { items: list.map(function (x) { return { id: x.id, title: x.title, ch: x.artist }; }) });
+      gmQSend('queueSet', { items: list.map(function (x) { return { id: x.id, title: x.title, ch: x.artist }; }) });
       gmToastPlayer('비슷한 곡 ' + list.length + '곡을 이어서 들어요');
       log('info', '비슷한 곡 믹스: ' + (cur.title || v) + ' → ' + list.length + '곡');
     }, function () { gmToastPlayer('비슷한 곡을 받지 못했어요'); });
@@ -5307,7 +5419,7 @@
   function mpPlayNow(x) {
     var s = mpSession(); if (s && !s.items.some(function (i) { return i.id === x.id; })) { s.items.push({ id: x.id, title: x.title, artist: x.artist || x.ch || '' }); gmLsSet(GM_KEY, s); }
     QU.items = [{ id: x.id, title: x.title, ch: x.artist || x.ch || '' }].concat(QU.items.filter(function (q) { return q.id !== x.id; }));
-    G.send('queueSet', { items: QU.items });
+    gmQSend('queueSet', { items: QU.items });
     quAdvance('바로 듣기');
   }
   var MIXC = { vid: '', list: null, p: null };
@@ -5496,7 +5608,7 @@
       rest.sort(function (a, b) { return pos(a) - pos(b); });
     }
     gmLsSet(GM_KEY, s);
-    G.send('queueSet', { items: rest });
+    gmQSend('queueSet', { items: rest });
     gmToastPlayer(s.shuffle ? '셔플 켜짐' : '셔플 꺼짐');
     mpTick();
   }
@@ -5507,8 +5619,8 @@
     if (mpRepeatMode() !== 'all') { gmToastPlayer('마지막 곡이에요'); return; }
     var cur = mpVid(), first = s.items[0];
     s.played = []; gmLsSet(GM_KEY, s);
-    G.send('queueSet', { items: s.items.slice(1).map(function (x) { return { id: x.id, title: x.title, ch: x.artist }; }) });
-    if (first.id !== cur) navigateTo('/watch?v=' + first.id);
+    gmQSend('queueSet', { items: s.items.slice(1).map(function (x) { return { id: x.id, title: x.title, ch: x.artist }; }) });
+    if (first.id !== cur) navigateTo('/watch?v=' + first.id + '&glide_music=1');
     else if (LM.el) { LM.el.currentTime = 0; LM.el.play().catch(function () {}); }
     else { var p = mainPlayer(), v = mpVideo(); if (p && v) loopBack(p, v); } // 한 곡짜리 세션: 끝나서 멈춘 영상을 다시 재생
   }
@@ -5523,8 +5635,8 @@
     if (!prev) { if (v) v.currentTime = 0; return; }
     s.played = pl; gmLsSet(GM_KEY, s);
     var now = mpInfo(cur);
-    G.send('queueSet', { items: [{ id: cur, title: now.title, ch: now.artist }].concat(QU.items.filter(function (x) { return x.id !== prev && x.id !== cur; })) });
-    navigateTo('/watch?v=' + prev);
+    gmQSend('queueSet', { items: [{ id: cur, title: now.title, ch: now.artist }].concat(QU.items.filter(function (x) { return x.id !== prev && x.id !== cur; })) });
+    navigateTo('/watch?v=' + prev + '&glide_music=1');
   }
   function mpTick() {
     try { lmSync(); } catch (e) { /* ignore */ }
@@ -5532,15 +5644,10 @@
     var h = document.documentElement;
     if (h) { if (on) h.setAttribute('data-glide-music', ''); else h.removeAttribute('data-glide-music'); }
     if (on !== MP.on) { MP.on = on; MP.showVideo = false; mpMediaPoke(); }
-    if (on !== MP.sentOn) { MP.sentOn = on; G.send('musicMode', { on: on }); } // 페이지가 새로 떠도 한 번은 알림
-    // 음악이 아닌 영상을 열었는데 대기열이 음악 세션 곡들뿐이면: 음악 대기열을 비움 (그 영상이 끝난 뒤 노래가 이어지지 않게).
-    // 방금(8초 안) 시작한 세션은 건드리지 않음(곡을 누른 직후 영상 웹뷰가 아직 예전 영상일 수 있음), Glide를 끈 상태도 제외 (독립 검토 반영)
-    var ss0 = role() === 'player' ? mpSession() : null;
-    if (ss0 && S().enabled && !onWatch() && Date.now() - ss0.at > 8000) { gmLsSet(GM_KEY, null); log('info', '영상 화면을 닫아 음악 세션을 끝냄'); }
-    if (!on && S().enabled && onWatch() && role() === 'player' && mpVid() && QU.items.length) {
-      var ss = mpSession();
-      if (ss && Date.now() - ss.at > 8000) { var ids = {}; ss.items.forEach(function (x) { ids[x.id] = 1; }); if (QU.items.every(function (x) { return ids[x.id]; })) { G.send('queueSet', { items: [] }); gmLsSet(GM_KEY, null); log('info', '음악이 아닌 영상을 열어 음악 대기열을 비움'); } }
-    }
+    var mvNow = !!(h && mpVid() && h.getAttribute('data-glide-mv') === mpVid() && mpSession());
+    var appOn = on || mvNow; // 뮤직비디오 보기: 음악 세션 안의 곡이면 앱에는 계속 음악
+    if (appOn !== MP.sentOn) { MP.sentOn = appOn; G.send('musicMode', { on: appOn }); } // 페이지가 새로 떠도 한 번은 알림
+    // (음악·동영상 대기열은 앱이 따로 저장 — 예전의 '음악이 아닌 영상을 열면 음악 대기열 비우기'는 필요 없어 뺌, 2026-11-23)
     // 한 곡 반복 = 기존 반복 재생(LP). 화면이 안 보일 때(작은 창·전체화면·영상 보기)도 곡이 바뀌면 다시 걸고, 앱 빠른 메뉴의 반복 표시도 맞춤.
     // 같은 곡에서 사용자가 빠른 메뉴로 반복을 끄면 다시 켜지 않음 (독립 검토 반영)
     var rep0 = mpRepeatMode(), cur0 = mpVid();
@@ -5955,7 +6062,7 @@
   }
   // 마지막 곡이 끝남: 전체 반복이면 처음부터 (대기열이 비면 유튜브 자동 재생이 엉뚱한 영상을 틀지 않게)
   document.addEventListener('ended', function (e) {
-    if (!MP.on || QU.items.length || LP.on || LM.el || Date.now() - (QU.advancedAt || 0) < 2000) return;
+    if (!(MP.on || MP.sentOn) || QU.items.length || LP.on || LM.el || Date.now() - (QU.advancedAt || 0) < 2000) return;
     var p = mainPlayer();
     if (!p || !p.contains(e.target)) return;
     if (mpRepeatMode() === 'all') mpNext();
@@ -6108,6 +6215,7 @@
     (function look() {
       if (gen !== tabWatch || Date.now() - t0 > 6000) return;
       var k = tabKey();
+      if (location.pathname !== from) { try { updateHideWatched(); } catch (e) { /* ignore */ } }
       if (location.pathname !== from && k) {
         var st = TABPOS[k];
         if (st && Date.now() - st.t < TC_MS && (st.y > 50 || st.id)) { G.setTimeout.call(W, function () { tabRestore(st); }, 60); }
@@ -6148,6 +6256,7 @@
     if (role() !== 'player' || !onWatch() || !S().enabled) return;
     var v = e.target, p = mainPlayer();
     if (!p || !v || !p.contains(v) || G.inAd() || document.documentElement.hasAttribute('data-glide-capture')) return; // 저장(16배속) 중은 본 것이 아님 (전수조사 반영)
+    if (MP.on || (G.musicNow && G.musicNow())) return; // 음악은 동영상 추천 학습에 넣지 않음
     var d = v.duration;
     if (!isFinite(d) || d < 90 || v.currentTime < Math.min(d * 0.6, 600)) return;
     var vd = null;

@@ -459,7 +459,7 @@
   }
   function sleepTick(v) {
     if (capturing()) return; // 저장의 빠른 재생으로 '영상 끝나면' 타이머가 쓰이지 않게
-    if (SL.mode === 'end' && isFinite(v.duration) && v.duration > 1 && v.duration - v.currentTime < 0.6) sleepStop();
+    if (SL.mode === 'end' && isFinite(v.duration) && v.duration > 1 && v.duration - v.currentTime < 0.35 + 0.3 * Math.max(1, v.playbackRate || 1)) sleepStop();
   }
 
   // ===========================================================================
@@ -496,7 +496,8 @@
     box.querySelector('span').textContent = text;
     btn.hidden = !actionLabel;
     btn.textContent = actionLabel || '';
-    btn.onclick = function (e) { e.stopPropagation(); box.hidden = true; if (action) action(); };
+    var vid0 = G.urlVideoId ? G.urlVideoId() : '';
+    btn.onclick = function (e) { e.stopPropagation(); box.hidden = true; if (action && (!vid0 || !G.urlVideoId || G.urlVideoId() === vid0)) action(); };
     box.hidden = false;
     if (toastTimer) G.clearTimeout.call(W, toastTimer);
     toastTimer = nativeLater(function () { box.hidden = true; }, P.toastMs);
@@ -531,6 +532,7 @@
     sbTick(p, e.target);
     sleepTick(e.target);
   }, cap);
+  document.addEventListener('ended', function (e) { var p = mainVideoEvent(e); if (p && SL.mode === 'end' && !capturing() && !G.inAd()) sleepStop(); }, cap);
   document.addEventListener('ratechange', function (e) {
     var p = mainVideoEvent(e);
     if (p && contentPlaying(p)) csLearn(p, e.target);
@@ -550,6 +552,7 @@
   function rsSave(p, v, force) {
     // Glide 시청 기록(앱 history)도 같은 메시지로: 이어보기가 꺼져 있으면 historyOnly
     if (!(on('resume') || S.history !== false) || capturing() || !p || !v || !isFinite(v.duration) || v.duration < 60 || !rsSameVideo(p)) return;
+    if (G.musicNow && G.musicNow()) return; // 음악(Glide Music)은 동영상 기록·이어보기와 따로
     var vid = videoIdOf(p), t = now();
     if (!force && t - RS.lastSent < 15000) return;
     if (!vid) return;

@@ -17,7 +17,7 @@
 (function () {
   'use strict';
 
-  var CORE_VERSION = '1.0.4';
+  var CORE_VERSION = '1.0.5';
   var CORE_API = 2; // filters.json의 minCore와 비교
 
   var W = window;
@@ -474,7 +474,7 @@
     if (!s.p || !rcStuck(s)) return;
     var track = getPath(s.resp, ['playbackTracking', 'videostatsPlaybackUrl', 'baseUrl']);
     if (typeof track === 'string' && track.indexOf('reloadxhr') !== -1) RC.list = RC.list.slice(1);
-    RC.flagged = true;
+    RC.flagged = true; RC.flagVid = urlVideoId() || '';
     log('warn', 'start', '재생 멈춤 신호 (' + why + ') · ' + nerdStats(s.p));
     // 페이지를 다 불러오기 전(DOMContentLoaded 전)에 영상을 다시 불러오면 플레이어가 아예 멈춤(2026-11-20 엣지 실측).
     // uBO도 신호 때는 표시만 하고 DOMContentLoaded 뒤 상태 확인에서 다시 불러옴 → 그때 rcCheck (아래 DOMContentLoaded 처리)
@@ -521,6 +521,8 @@
       if (RC.marker) log('warn', 'start', '모든 방식을 써 봤지만 해결되지 않아 기본 방식으로 돌아감');
       RC.flagged = false;
       setMarker('');
+    } else if (RC.flagged && RC.flagVid && RC.flagVid !== (urlVideoId() || '')) {
+      RC.flagged = false; // 다른 영상으로 넘어감
     } else if (RC.flagged && rcStuck(s)) {
       setMarker(RC.list[0]);
       RC.flagged = false;
@@ -1110,7 +1112,7 @@
       if (!isAdShowing(player) || SK.inAd) return;
       var v = videoOf(player);
       var ev = adEvidence(player, v);
-      if (ev) { SK.evidence = ev; handleAd(player, v, '지연 확인'); return; }
+      if (ev) { check(player, v, '지연 확인'); return; }
       var names = {};
       try {
         player.querySelectorAll('[class*="ad-"],[class*="-ad"],[class*="Ad"]').forEach(function (el) {
@@ -1139,7 +1141,10 @@
   }
   function check(player, video, why) {
     if (!player || !isMainPlayer(player)) return;
-    if (SK.inAd && SK.player && player !== SK.player) return;
+    if (SK.inAd && SK.player && player !== SK.player) {
+      if (SK.player.isConnected) return;
+      exitAd(SK.player, SK.video, '플레이어 바뀜');
+    }
     var v = video || videoOf(player);
     if (adStillOn(player) && on('skip')) {
       var ev = adEvidence(player, v);
@@ -1608,7 +1613,7 @@
     if (music && (at > 2 || inProgress(vid))) return;
     if (!music && listen && (qualityVid === vid || at > 2 || inProgress(vid))) { qualityVid = vid; return; } // 이미 시작한 영상(이어보기 위치 포함): 그대로 둠
     // 화질을 이미 정했고 본편이 재생 중인 영상: 설정(와이파이·데이터 화질)이 바뀌어도 그대로, 다음 영상부터 (재생 중 화질 변경 = 처음부터 다시 불러옴, 1.5.5)
-    if (!music && decidedVid === vid && inProgress(vid)) return;
+    if (!music && inProgress(vid)) { decidedVid = vid; return; }
     var want = music ? '144' : listen ? '240' : S.quality;
     if (!want || want === 'auto') {
       // 직전 듣기 모드 영상의 240p 고정이 플레이어에 남아 있으면, 새 영상을 시작할 때(재생 전) 풀어 줌
@@ -1681,7 +1686,7 @@
     F.antiAdblock.backdropSelectors.forEach(function (s) {
       try { document.querySelectorAll(s).forEach(function (b) { b.remove(); }); } catch (e) { /* ignore */ }
     });
-    var v = document.querySelector(F.player.selector + ' video');
+    var v = videoOf(mainPlayer()) || document.querySelector(F.player.selector + ' video');
     if (v && v.paused) { var pr = v.play(); if (pr && pr.catch) pr.catch(function () {}); }
     resumeUntil = now() + 1200;
     log('info', 'detect', '경고 팝업을 닫고 재생을 이어감');
