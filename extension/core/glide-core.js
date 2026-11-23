@@ -17,7 +17,7 @@
 (function () {
   'use strict';
 
-  var CORE_VERSION = '1.0.2';
+  var CORE_VERSION = '1.0.3';
   var CORE_API = 2; // filters.json의 minCore와 비교
 
   var W = window;
@@ -1599,6 +1599,7 @@
     var at = v ? (v.currentTime || 0) : 0;
     var music = musicNow();
     var listen = listenNow() || music;
+    if (!music && !listenNow() && lsGet('glide:saver-prev') !== null) restoreSaverPref(false, '음악이 끝나 유튜브 화질 선호를 되돌림');
     // 음악: 곡마다 처음 한 번 144p (이어보기 위치가 있어도 — 음악은 처음부터 재생하므로 at 은 보지 않음)
     // (속성이 첫 재생보다 늦게 붙어 이미 다른 화질로 정했어도 한 번은 144p로 바꿈)
     if (music && qualityDone === vid + '144') return;
@@ -1634,6 +1635,12 @@
     if (!target) target = levels[levels.length - 1];
     // 원래 화질 선호는 처음 한 번만 보관 (2초 안에 듣기 영상이 두 번 바뀌어도 240p를 '원래 값'으로 덮지 않게)
     if (listen && lsGet('glide:saver-prev') === null) lsSet('glide:saver-prev', JSON.stringify({ v: lsGet('yt-player-quality') }));
+    var curQ = null; try { curQ = p.getPlaybackQuality && p.getPlaybackQuality(); } catch (e) { /* ignore */ }
+    if (music && curQ === target) {
+      qualityDone = vid + want; qualityVid = vid; decidedVid = vid; qualityListen = vid; listenLocked = true;
+      log('info', 'quality', '음악: 처음부터 ' + (Q_LABEL[target] || target) + '로 받는 중 (다시 불러오지 않음) [' + vid + ']');
+      return;
+    }
     try {
       if (p.setPlaybackQualityRange) p.setPlaybackQualityRange(target, target);
       if (p.setPlaybackQuality) p.setPlaybackQuality(target);
@@ -1645,8 +1652,10 @@
       qualityListen = vid;
       listenLocked = true;
       // 유튜브가 나중에 선호를 다시 쓸 수 있어 두 번 되돌리고, 두 번째에 보관본을 지움
-      nativeSetTimeout(function () { restoreSaverPref(true); }, 2000);
-      nativeSetTimeout(function () { restoreSaverPref(false); }, 8000);
+      if (!music) {
+        nativeSetTimeout(function () { restoreSaverPref(true); }, 2000);
+        nativeSetTimeout(function () { restoreSaverPref(false); }, 8000);
+      }
     } else listenLocked = false;
     log('info', 'quality', (listen ? '듣기 모드: ' : '') + '화질 ' + (Q_LABEL[target] || target) + '로 설정 (원하는 화질 ' + want + ', 위치 ' + at.toFixed(1) + '초, 가능: ' + levels.map(function (q) { return Q_LABEL[q] || q; }).join('/') + ') [' + vid + ']');
   }
@@ -1763,6 +1772,9 @@
   // 음악 재생 중: 알림·잠금화면 정보(정리한 제목·가수, 반복·좋아요 상태)를 페이지가 덧씌움
   var mediaMeta = null;
   function setMediaMeta(h) { mediaMeta = typeof h === 'function' ? h : null; lastMedia = ''; }
+  // 음악 재생 화면(MP.on)일 때만: 이어폰·알림의 재생·일시정지·이전·다음을 음악 쪽이 먼저 처리 (동영상은 아래 예전 처리 그대로 — 음악·동영상 분리)
+  var mediaKeys = null;
+  function setMediaKeys(h) { mediaKeys = typeof h === 'function' ? h : null; }
   function mediaRefresh() { lastMedia = ''; var p = mainPlayer(), v = videoOf(p) || document.querySelector('video'); if (v && p) mediaReport(v, p, 'pause'); }
   function mediaReport(v, p, type) {
     if (localMedia) return;
@@ -1794,6 +1806,7 @@
   }
   function runCommand(cmd, arg) {
     if (localMedia && PLATFORM === 'android') { try { if (localMedia(cmd, arg)) return; } catch (e) { log('error', 'cmd', '저장된 곡 조작 실패: ' + e.message); } }
+    if (mediaKeys && PLATFORM === 'android') { try { if (mediaKeys(cmd, arg)) return; } catch (e) { log('error', 'cmd', '음악 ' + cmd + ' 실패: ' + e.message); } }
     // 영상 화면을 떠났으면 알림·블루투스의 재생 조작이 홈 피드 미리보기를 틀지 않게 무시
     if (PLATFORM === 'android' && !watchContext() && (cmd === 'play' || cmd === 'toggle' || cmd === 'next' || cmd === 'prev')) {
       log('info', 'cmd', cmd + ' 무시 (영상 화면이 아님)');
@@ -1881,7 +1894,7 @@
         mainPlayer: mainPlayer, playerOf: playerOf, videoOf: videoOf, isMainPlayer: isMainPlayer,
         isAdShowing: isAdShowing, inAd: function () { return SK.inAd; },
         afterAd: function () { return perf() < SK.guardUntil; },
-        urlVideoId: urlVideoId, currentVideoId: currentVideoId, musicNow: musicNow, setLocalMedia: setLocalMedia, setMediaMeta: setMediaMeta, mediaRefresh: mediaRefresh,
+        urlVideoId: urlVideoId, currentVideoId: currentVideoId, musicNow: musicNow, setLocalMedia: setLocalMedia, setMediaMeta: setMediaMeta, mediaRefresh: mediaRefresh, setMediaKeys: setMediaKeys,
         videoMeta: function (id) { return (id && videoMeta.get(id)) || null; },
         getPath: getPath, setTimeout: nativeSetTimeout, clearTimeout: nativeClearTimeout,
         parse: nativeParse, stringify: nativeStringify, disguise: disguise, el: makeEl
