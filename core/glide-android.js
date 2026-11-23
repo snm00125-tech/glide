@@ -2428,11 +2428,12 @@
     // 음악 탭의 아래 창(곡 메뉴·담기 등)이 떠 있음: 앱이 작은 플레이어를 잠깐 숨김 (창 아래쪽을 가리지 않게)
     var pop = role() === 'browse' && !!(GM && GM.menu);
     var np = role() === 'browse' && !!(GM && GM.open && NP && NP.shown && npActive());
+    var gmo = role() === 'browse' && !!(GM && GM.open);
     var hold = role() === 'player' && !!((typeof LY !== 'undefined' && LY.el) || (MP && MP.sl));
-    var sig = JSON.stringify([rect, innerWidth, innerHeight, sheet, top, chat, pop, hold, np]);
+    var sig = JSON.stringify([rect, innerWidth, innerHeight, sheet, top, chat, pop, hold, np, gmo]);
     if (sig === lastGeom) return;
     lastGeom = sig;
-    G.send('geom', { rect: rect, iw: innerWidth, ih: innerHeight, sheet: sheet, top: top, chat: chat, pop: pop, hold: hold, np: np });
+    G.send('geom', { rect: rect, iw: innerWidth, ih: innerHeight, sheet: sheet, top: top, chat: chat, pop: pop, hold: hold, np: np, gm: gmo });
   }
   // 누른 뒤 열리는 창(댓글·설명·메뉴)을 앱이 빨리 알게: 창이 열린 직후 아래로 끌면 창 대신 영상이 작아졌음
   W.addEventListener('click', function () { if (role() === 'player') [350, 900].forEach(function (ms) { G.setTimeout.call(W, reportGeom, ms); }); }, true);
@@ -4505,7 +4506,7 @@
     GM.el.hidden = false;
     lastGeom = ''; reportGeom(); lastPull = null; reportPull();
     gmRender();
-    G.send('npAsk', {}); npDraw();
+    G.send('npAsk', {}); npDraw(); lastGeom = ''; reportGeom();
     // 열린 직후 상단 바가 다시 내려오는 동안 매 화면마다 자리 맞춤 (0.6초)
     var t0 = Date.now(); (function follow() { if (!GM.open) return; gmPlace(); if (Date.now() - t0 < 600) W.requestAnimationFrame(follow); })();
     if (GM.keepTop) { var kt = GM.keepTop; W.requestAnimationFrame(function () { if (GM.open) GM.el.scrollTop = kt; }); }
@@ -4656,15 +4657,66 @@
       btn('prev', '이전 곡', function () { go('prev'); }), NP.play, btn('next', '다음 곡', function () { go('next'); }),
       G.el('div', { 'class': 'np-tr' }, [NP.bar])
     ]);
-    NP.el.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('button')) return; e.preventDefault(); e.stopPropagation(); G.send('haptic', { kind: 'gesture' }); if (npActive()) G.send('musicCtl', { cmd: 'expand' }); else go('here'); }, true);
+    npSwipe(go);
+    NP.el.addEventListener('click', function (e) { if (NP.swiped) { e.preventDefault(); e.stopPropagation(); return; } if (e.target.closest && e.target.closest('button')) return; e.preventDefault(); e.stopPropagation(); G.send('haptic', { kind: 'gesture' }); if (npActive()) G.send('musicCtl', { cmd: 'expand' }); else go('here'); }, true);
     document.body.appendChild(NP.el);
+  }
+  function npSwipe(go) {
+    var el = NP.el, x0 = 0, y0 = 0, t0 = 0, axis = '', dx = 0, dy = 0;
+    var anim = function (tf, op, ms, then) { el.style.transition = 'transform ' + ms + 'ms cubic-bezier(.2,0,0,1),opacity ' + ms + 'ms'; el.style.transform = tf; el.style.opacity = op; if (then) G.setTimeout.call(W, then, ms); };
+    var reset = function () { el.style.transition = 'none'; el.style.transform = ''; el.style.opacity = ''; };
+    el.addEventListener('touchstart', function (e) {
+      var t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; t0 = Date.now(); axis = ''; dx = dy = 0; NP.swiped = false;
+      GM.dragging = true; lastPull = null; reportPull(); // 아래로 밀 때 앱의 당겨서 새로고침이 끼어들지 않게
+      el.style.transition = 'none';
+    }, { passive: true });
+    el.addEventListener('touchmove', function (e) {
+      var t = e.touches[0]; dx = t.clientX - x0; dy = t.clientY - y0;
+      if (!axis) { if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return; axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'; NP.swiped = true; }
+      if (e.cancelable) e.preventDefault();
+      if (axis === 'x') { el.style.transform = 'translateX(' + dx + 'px)'; el.style.opacity = String(Math.max(.35, 1 - Math.abs(dx) / 320)); }
+      else if (dy > 0) { el.style.transform = 'translateY(' + dy + 'px)'; el.style.opacity = String(Math.max(.2, 1 - dy / 160)); }
+      else el.style.transform = 'translateY(' + (dy * 0.35) + 'px)';
+    }, { passive: false });
+    var end = function () {
+      GM.dragging = false; lastPull = null; reportPull();
+      if (!axis) return;
+      var v = Math.max(Math.abs(dx), Math.abs(dy)) / Math.max(1, Date.now() - t0);
+      if (axis === 'x' && (Math.abs(dx) > 80 || (Math.abs(dx) > 36 && v > 0.5))) {
+        var next = dx < 0, w = innerWidth;
+        G.send('haptic', { kind: 'gesture' });
+        anim('translateX(' + (next ? -w : w) + 'px)', '0', 160, function () {
+          go(next ? 'next' : 'prev');
+          // 새 곡이 반대쪽에서 들어옴
+          el.style.transition = 'none'; el.style.transform = 'translateX(' + (next ? w * 0.4 : -w * 0.4) + 'px)'; el.style.opacity = '0';
+          void el.offsetWidth; anim('translateX(0)', '1', 220, function () { reset(); });
+        });
+        log('info', '음악 막대: ' + (next ? '왼쪽 밀기 → 다음 곡' : '오른쪽 밀기 → 이전 곡'));
+      } else if (axis === 'y' && dy < -40) {
+        G.send('haptic', { kind: 'gesture' });
+        anim('translateY(-12px)', '1', 120, function () { reset(); });
+        if (npActive()) G.send('musicCtl', { cmd: 'expand' }); else go('here');
+        log('info', '음악 막대: 위로 밀기 → 재생 화면');
+      } else if (axis === 'y' && (dy > 60 || (dy > 30 && v > 0.5))) {
+        G.send('haptic', { kind: 'gesture' });
+        anim('translateY(120%)', '0', 180, function () {
+          NP.dismissed = true; NP.gone = npActive() ? NP.d.vid : '';
+          if (npActive()) G.send('musicCtl', { cmd: 'close' });
+          reset(); npDraw();
+        });
+        log('info', '음악 막대: 아래로 밀기 → 막대 치우고 끔');
+      } else anim('', '', 180, function () { reset(); });
+      G.setTimeout.call(W, function () { NP.swiped = false; }, 350);
+    };
+    el.addEventListener('touchend', end, { passive: true });
+    el.addEventListener('touchcancel', end, { passive: true });
   }
   function npDraw() {
     if (!GM.el) return;
     var it = null, playing = false;
     if (npActive()) { it = { id: NP.d.vid, title: NP.d.title, artist: NP.d.artist }; playing = !!NP.d.playing; }
     else { var l = npLast(); if (l) it = l.list[l.i]; }
-    var show = !!(GM.open && it && it.id && !(NP.d && NP.d.expanded));
+    var show = !!(GM.open && it && it.id && !(NP.d && NP.d.expanded) && !NP.dismissed);
     if (show) {
       npBuild();
       var src = 'https://i.ytimg.com/vi/' + it.id + '/mqdefault.jpg';
@@ -4689,7 +4741,10 @@
     if (npActive() && d.dur > 0) { var pos = d.pos + (d.playing ? (Date.now() - d.at) / 1000 * (d.rate || 1) : 0); p = Math.max(0, Math.min(1, pos / d.dur)); }
     NP.bar.style.width = (p * 100).toFixed(2) + '%';
   }
-  G.onCommand('nowPlaying', function (d) { if (role() !== 'browse') return; NP.d = d || null; if (NP.d) NP.d.at = Date.now(); npDraw(); });
+  G.onCommand('nowPlaying', function (d) { if (role() !== 'browse') return; NP.d = d || null; if (NP.d) NP.d.at = Date.now();
+    // 아래로 밀어 치운 막대: 그 곡이 꺼진 뒤(active false) 다시 듣기 시작하면 다시 나타남
+    if (!NP.d || !NP.d.active) NP.gone = ''; else if (NP.dismissed && NP.d.vid !== NP.gone) NP.dismissed = false;
+    npDraw(); });
   function gmToast(text) {
     var t = document.getElementById('glide-gm-toast');
     if (!t) { t = G.el('div', { id: 'glide-gm-toast', 'data-glide': 'music', style: 'position:fixed;left:16px;right:16px;bottom:90px;z-index:2147483647;padding:12px 16px;border-radius:10px;background:#323232;color:#fff;font:400 14px/1.35 Roboto,sans-serif;pointer-events:none;transition:opacity .2s' }); document.body.appendChild(t); }

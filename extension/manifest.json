@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Glide",
   "short_name": "Glide",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "유튜브 광고를 처음부터 걷어내는 개인용 광고 차단기",
   "minimum_chrome_version": "111",
   "icons": {
