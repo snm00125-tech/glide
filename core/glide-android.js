@@ -449,7 +449,12 @@
     }
     var parent = lockParent();
     if (ROT.btn.parentNode !== parent) parent.appendChild(ROT.btn);
-    ROT.btn.hidden = !inFull() || LK.on || !controlsShown();
+    // 조작부가 사라지는 순간 누른 것도 받게 0.8초 더 남겨 둠 (예전: 사라지는 찰나에 누르면 조작부만 다시 뜨고 안 돌아감 — 2026-11-23 사용자)
+    var shown = controlsShown();
+    if (shown) ROT.seen = Date.now();
+    var grace = !shown && Date.now() - (ROT.seen || 0) < 800;
+    ROT.btn.hidden = !inFull() || LK.on || !(shown || grace);
+    if (grace) { clearTimeout(ROT.t); ROT.t = G.setTimeout.call(W, function () { try { rotUpdate(); } catch (e) { /* ignore */ } }, 820); }
   }
   G.onCommand('brightness', function (arg) { if (arg && typeof arg.v === 'number' && arg.v >= 0 && !BR.touched) { BR.v = arg.v; if (BR.open) brShow(arg.v); } });
   document.addEventListener('fullscreenchange', function () { if (!fullscreenEl()) document.documentElement.classList.remove('glide-zoom'); });
@@ -1683,6 +1688,25 @@
     G.send('frame', { data: url.slice(url.indexOf(',') + 1), w: c.width, h: c.height, title: (vd && vd.title) || document.title || '', id: (vd && vd.video_id) || '', t: Math.floor(v.currentTime || 0) });
     log('info', '장면 저장 ' + c.width + 'x' + c.height + ' ' + Math.floor(v.currentTime || 0) + '초');
   }
+  // 올린 때: '방금 · N분 전 · N시간 전 · N일 전 · N주 전 · N개월 전 · N년 전' (플레이어 정보 publishDate/uploadDate, 지금 영상 것만)
+  function ownerAge() {
+    try {
+      var p = mainPlayer(), pr = p && p.getPlayerResponse && p.getPlayerResponse(), v = new URLSearchParams(location.search).get('v');
+      if (!pr || !pr.videoDetails || pr.videoDetails.videoId !== v || pr.videoDetails.isLive) return '';
+      var mf = pr.microformat && pr.microformat.playerMicroformatRenderer;
+      var d = mf && (mf.publishDate || mf.uploadDate); if (!d) return '';
+      var t = Date.parse(d); if (!isFinite(t)) return '';
+      if (!/T/.test(d) && Date.now() - t < 86400000) return '오늘'; // 날짜만 있는 경우
+      var s = (Date.now() - t) / 1000;
+      if (s < 0) s = 0;
+      if (s < 3600) return s < 60 ? '방금' : Math.floor(s / 60) + '분 전';
+      if (s < 86400) return Math.floor(s / 3600) + '시간 전';
+      if (s < 86400 * 7) return Math.floor(s / 86400) + '일 전';
+      if (s < 86400 * 30) return Math.floor(s / (86400 * 7)) + '주 전';
+      if (s < 86400 * 365) return Math.floor(s / (86400 * 30)) + '개월 전';
+      return Math.floor(s / (86400 * 365)) + '년 전';
+    } catch (e) { return ''; }
+  }
   // 채널 줄: 유튜브 앱처럼 [사진 채널 이름 구독자 수 ......... 구독] 한 줄 (모바일 웹은 사진·구독 버튼이 버튼 줄 맨 앞에 끼어 있고 이름이 없음).
   // 유튜브 요소는 옮기지 않고(유튜브가 다시 그리면 깨짐) Glide 줄을 따로 만들어 보여 주고, 원래 사진·구독 버튼은 숨김.
   // 구독 버튼은 유튜브 구독 버튼을 대신 누름(구독 취소 확인 창 등 유튜브 동작 그대로). 글자·상태는 유튜브 버튼을 따라감
@@ -1703,6 +1727,9 @@
     var en = !m && /^(.*?),\s*([\d.,]+[KMB]?)\s*subscribers/i.exec(icon.getAttribute('aria-label') || '');
     var name = m ? m[1] : en ? en[1] : (icon.getAttribute('aria-label') || '').split(',')[0];
     var count = m ? m[2] : en ? en[2] : '';
+    // 구독자 수 옆에 올린 때 ('1.46만 · 3일 전', 2026-11-23 사용자). 플레이어 정보의 게시일(이 영상 것일 때만)
+    var age = ownerAge();
+    if (age) count = count ? count + ' · ' + age : age;
     var img = icon.querySelector('img'), src = img && img.getAttribute('src');
     var subBtn = subWrap && subWrap.querySelector('button');
     var subText = subBtn ? (subBtn.textContent || '').trim() : '';
@@ -3150,7 +3177,13 @@
         walk(v, d + 1);
       }
     })(json, 0);
-    return { items: out, cont: cont };
+    // 조회수가 아주 낮은 영상은 뺌 (2026-11-23 사용자: "조회수 10 이하 같은 건 다 무단 도용한 사람들 영상"). 1천 회 미만은 빼고,
+    // 다 빠져 칸이 비면 1백 회 이상만은 남김. 조회수 표시가 없는 영상(라이브 등)은 그대로
+    var vw = function (x) { var n = gmViews(x.views); return n < 0 ? Infinity : n; };
+    var good = out.filter(function (x) { return vw(x) >= 1000; });
+    if (!good.length && out.length) good = out.filter(function (x) { return vw(x) >= 100; });
+    if (good.length < out.length) REC.lowCut = (REC.lowCut || 0) + (out.length - good.length);
+    return { items: good, cont: cont };
   }
   function recSearch(q, sp, tag) {
     return yti('search', { query: q, params: sp }).then(function (j) { var r = recItems(j); return { tag: tag, items: r.items, cont: r.cont }; })
@@ -3328,7 +3361,9 @@
       REC.moreBusy = false;
       // 지금 보기의 목록 끝에 붙임
       var list = REC.moreList;
-      if (list && list === list0 && REC.view === view0) (REC.view === 'all' ? add : REC.all.slice(before).filter(recInView)).forEach(function (it) { list.appendChild(recBig(it, REC.view === 'all')); });
+      // 최신순·조회수순이면 새로 받은 것까지 다시 정렬해 그림 (뒤에 붙이면 순서가 틀어짐). 보던 자리는 그대로
+      if (list && list === list0 && REC.view === view0 && (REC.sort || 'rec') !== 'rec') { var keepY = REC.el.scrollTop; recRender(); REC.el.scrollTop = keepY; }
+      else if (list && list === list0 && REC.view === view0) (REC.view === 'all' ? add : REC.all.slice(before).filter(recInView)).forEach(function (it) { list.appendChild(recBig(it, REC.view === 'all')); });
       if (REC.more) REC.more.textContent = '';
     });
   }
@@ -3552,7 +3587,7 @@
   }
   // 작은 카드: 가로 줄 안
   function recSmall(it) {
-    return G.el('a', { 'class': 'gr-small', href: '/watch?v=' + it.id }, [recThumb(it), G.el('div', { 'class': 'gr-t', text: it.title }), recMeta([it.ch, it.views])]);
+    return G.el('a', { 'class': 'gr-small', href: '/watch?v=' + it.id }, [recThumb(it), G.el('div', { 'class': 'gr-t', text: it.title }), recMeta([it.ch, it.views, it.age])]);
   }
   function recHead(title, sub, action, onAction, addStyle) {
     return G.el('div', { 'class': 'gr-sh' }, [G.el('div', {}, [G.el('h2', { text: title }), sub ? G.el('p', { text: sub }) : null]), action ? recBtn(addStyle ? 'add' : '', action, onAction) : null]);
@@ -3591,7 +3626,25 @@
         REC.top.appendChild(sub);
       }
     }
+    // 정렬: 추천순(기본, 아래 구성 그대로) · 최신순 · 조회수순 (2026-11-23 사용자) — 고르면 지금 보기의 영상을 한 목록으로 정렬
+    var sorts = G.el('div', { 'class': 'gr-sub gr-sort' });
+    [['rec', '추천순'], ['new', '최신순'], ['view', '조회수순']].forEach(function (o) {
+      sorts.appendChild(recBtn('gr-chip', o[1], function () { if ((REC.sort || 'rec') === o[0]) return; REC.sort = o[0]; recRender(); if (REC.el) REC.el.scrollTop = 0; }, { 'aria-pressed': String((REC.sort || 'rec') === o[0]) }));
+    });
+    REC.top.appendChild(sorts);
     recClear(REC.body); REC.moreList = null; REC.more.textContent = '';
+    if ((REC.sort || 'rec') !== 'rec' && REC.all.length && !REC.failed) {
+      var pool = REC.view === 'all' ? REC.all.slice() : REC.all.filter(recInView), seenS = {};
+      pool = pool.filter(function (it) { if (seenS[it.id]) return false; seenS[it.id] = 1; return true; });
+      var key = REC.sort === 'new' ? function (it) { var a = gmAge(it.age); return a < 0 ? Infinity : a; } : function (it) { var v = gmViews(it.views); return v < 0 ? -1 : -v; };
+      pool = pool.map(function (it, i) { return { it: it, k: key(it), i: i }; }).sort(function (a, b) { return a.k - b.k || a.i - b.i; }).map(function (o) { return o.it; });
+      var sl = G.el('div', {});
+      pool.forEach(function (it) { sl.appendChild(recBig(it, REC.view === 'all')); });
+      REC.body.appendChild(sl);
+      REC.moreList = sl;
+      if (!pool.length) REC.body.appendChild(recNote('여기에 보여 드릴 영상이 아직 없어요', '추천순으로 바꿔 보세요'));
+      return;
+    }
     if (REC.loading && !REC.all.length) { // 불러오는 동안 빈 카드 모양
       for (var s = 0; s < 3; s++) REC.body.appendChild(G.el('div', { 'class': 'gr-skel' }, [G.el('div', { 'class': 'gr-thumb' }), G.el('i'), G.el('i', { style: 'width:40%' })]));
       return;
