@@ -1,12 +1,12 @@
 {
-  "versionCode": 20008,
-  "versionName": "1.0.8",
-  "apk": "https://raw.githubusercontent.com/snm00125-tech/glide/main/apk/glide-1.0.8.apk",
-  "sha256": "007ce1a0e763d9f128682b06cf7dbd33f8534ef7846a4a7d42c92ebb18a96c0f",
-  "size": 3082316,
+  "versionCode": 20009,
+  "versionName": "1.0.9",
+  "apk": "https://raw.githubusercontent.com/snm00125-tech/glide/main/apk/glide-1.0.9.apk",
+  "sha256": "9f05280864892e8c5704ff3124d9d9a7042a1ed59699027f56045b42b5ec6a4b",
+  "size": 3083700,
   "notes": [
-    "초대 코드 준비 — 운영자가 준 코드를 넣거나 앱에서 운영자에게 요청해 승인받은 기기만 쓸 수 있게 하는 기능 (서버를 켜기 전까지는 지금처럼 그대로 열려요)",
-    "설정 → 앱 → 보안에 '초대 코드' (서버가 준비되면 보임): 등록 상태와 기기 번호"
+    "노래를 듣다가 앱에 들어가면 가끔 처음으로 돌아가던 것 고침 — 페이지를 새로 불러오거나 유튜브가 곡을 다시 받아도, 저장된 곡이 유튜브로 바뀌어도 듣던 자리부터 이어져요",
+    "초대 코드 관리 화면을 운영자 전용 서버로 분리 — 운영자 기기에서만 설정 → 초대 코드 → 코드 관리가 열려요"
   ],
   "date": "2026-11-23"
 }

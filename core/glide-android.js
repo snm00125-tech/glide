@@ -4176,6 +4176,7 @@
     gmLsSet(GM_KEY, sess);
     G.send('haptic', { kind: 'gesture' });
     // 영상 열기를 먼저 보냄: 대기열이 먼저 가면 영상 웹뷰가 아직 예전(음악 아닌) 영상일 때 '음악 대기열 비우기'에 걸렸음 (독립 검토 반영)
+    try { localStorage.removeItem('glide:gmPos'); } catch (e) { /* ignore */ } // 골라서 듣는 곡은 처음부터
     G.send('openVideo', { url: location.origin + '/watch?v=' + order[0].id + '&glide_music=1' });
     gmQSend('queueSet', { items: order.slice(1).map(function (x) { return { id: x.id, title: x.title, ch: x.artist }; }) });
     log('info', '음악 재생: ' + order[0].title + ' 외 ' + (order.length - 1) + '곡' + (shuffle ? ' (셔플)' : ''));
@@ -6071,9 +6072,56 @@
     gmQSend('queueSet', { items: [{ id: cur, title: now.title, ch: now.artist }].concat(QU.items.filter(function (x) { return x.id !== prev && x.id !== cur; })) });
     navigateTo('/watch?v=' + prev + '&glide_music=1');
   }
+  // ---- 곡 위치 지키기 (음악만, 2026-11-23 사용자: "잘 듣다가 앱에 들어가면 가끔 노래가 처음으로") ----
+  // 페이지를 새로 불러오거나(렌더러 재시작·테마·복구) 유튜브가 같은 곡을 다시 받으면(emptied·loadstart) 위치가 0이 됨.
+  // 음악은 이어보기 위치를 쓰지 않아(기록 분리) 그대로 처음부터 재생됐음 → 마지막 위치를 기억해 두었다가 그 경우에만 되돌림.
+  // 사용자가 처음으로 돌린 것(이전 버튼·반복·진행 막대)은 다시 받기 신호가 없어서 건드리지 않음. 곡 끝 근처·광고 중은 제외
+  var GM_POS = 'glide:gmPos';
+  var MPG = { vid: '', t: 0, saveAt: 0, el: null, doc: {}, back: 0, from: 0, until: 0 };
+  function mpgAd() { var p = mainPlayer(); return !!(p && p.classList && p.classList.contains('ad-showing')); }
+  function mpgSeek(t) {
+    if (LM.el) { try { LM.el.currentTime = t; } catch (e) { /* ignore */ } return; }
+    var p = mainPlayer();
+    try { if (p && p.seekTo) p.seekTo(t, true); else { var v = p && p.querySelector('video'); if (v) v.currentTime = t; } } catch (e) { /* ignore */ }
+  }
+  function mpgTick(on) {
+    if (!on) return;
+    var vid = mpVid(), v = mpVideo();
+    if (!vid || !v) return;
+    if (MPG.el !== v) {
+      MPG.el = v;
+      ['emptied', 'loadstart'].forEach(function (t) {
+        v.addEventListener(t, function () { if (MPG.vid && MPG.vid === mpVid() && MPG.t > 5) { MPG.back = Date.now(); MPG.from = MPG.t; MPG.until = Date.now() + 15000; } });
+      });
+    }
+    var t = v.currentTime || 0, d = isFinite(v.duration) ? v.duration : 0, now = Date.now();
+    if (MPG.vid !== vid) {
+      MPG.vid = vid; MPG.t = 0; MPG.until = 0;
+      // 이 페이지에서 처음 보는 곡인데 방금(20분 안) 듣던 곡이면 = 페이지를 새로 불러온 것 → 그 위치로
+      if (!MPG.doc[vid]) {
+        MPG.doc[vid] = 1;
+        var sp = gmLsGet(GM_POS);
+        if (sp && sp.vid === vid && now - sp.at < 20 * 60000 && sp.t > 5 && (!sp.d || sp.t < sp.d - 5)) { MPG.from = sp.t; MPG.until = now + 25000; }
+      }
+    }
+    if (MPG.until) {
+      if (now > MPG.until) MPG.until = 0;
+      else if (!mpgAd() && d > 0 && t < 3 && MPG.from < d - 3) {
+        MPG.until = 0;
+        mpgSeek(MPG.from);
+        log('info', '곡이 처음으로 돌아가 들던 자리로 되돌림 (' + Math.round(MPG.from) + '초) [' + vid + ']');
+        return;
+      } else if (t >= 3 && Math.abs(t - MPG.from) < 4) MPG.until = 0; // 이미 그 자리
+    }
+    if (!v.paused && !mpgAd() && t > 0) {
+      MPG.t = t;
+      if (now - MPG.saveAt > 2000) { MPG.saveAt = now; gmLsSet(GM_POS, { vid: vid, t: Math.floor(t), d: Math.floor(d), at: now }); }
+    }
+  }
   function mpTick() {
     try { lmSync(); } catch (e) { /* ignore */ }
     var on = mpIsMusic();
+    try { mpgTick(on); } catch (e) { /* ignore */ }
     var h = document.documentElement;
     if (h) { if (on) h.setAttribute('data-glide-music', ''); else h.removeAttribute('data-glide-music'); }
     if (on !== MP.on) { MP.on = on; MP.showVideo = false; mpMediaPoke(); }
@@ -6243,7 +6291,12 @@
   });
   function lmSync() {
     var cur = mpVid();
-    if (LM.el && (LM.vid !== cur || LM.want !== cur)) lmStop();
+    if (LM.el && (LM.vid !== cur || LM.want !== cur)) {
+      var same = LM.vid === cur, at1 = LM.el.currentTime || 0;
+      lmStop();
+      // 같은 곡을 유튜브로 이어 들음: 막아 두었던 유튜브 영상은 0초에 멈춰 있음 → 듣던 자리로 옮김
+      if (same && at1 > 3) { try { var p1 = mainPlayer(); if (p1 && p1.seekTo) p1.seekTo(at1, true); } catch (e) { /* ignore */ } MPG.from = at1; MPG.until = Date.now() + 15000; }
+    }
     if (!LM.el && LM.want && LM.want === cur && role() === 'player' && onWatch()) lmStart(cur);
   }
   var LOUD_KEY = 'glide:gmLoud';
@@ -6271,6 +6324,8 @@
     }).catch(function () {});
   }
   function lmStart(vid) {
+    // 유튜브로 이미 듣던 중에 저장된 곡으로 넘어가면 그 자리부터 (위치 지키기가 옮겨 줌)
+    try { var yv = mainPlayer() && mainPlayer().querySelector('video'); if (yv && yv.currentTime > 3 && mpVid() === vid) { MPG.from = yv.currentTime; MPG.until = Date.now() + 15000; } } catch (e) { /* ignore */ }
     var a = document.createElement('audio');
     a.setAttribute('data-glide', 'music'); a.preload = 'auto'; a.style.display = 'none';
     // 웹뷰의 소리 요소는 앱이 가로채 주는 주소를 직접 받지 못함(폰 확인: 계속 불러오는 중) → fetch 로 받아 페이지 안 주소(blob)로 재생
@@ -6289,8 +6344,9 @@
     a.addEventListener('ended', lmEnded);
     a.addEventListener('error', function () {
       log('warn', '저장된 곡 재생 실패 [' + vid + '] → 유튜브로 재생');
+      var at0 = Math.floor(a.currentTime || 0);
       G.send('musicLocalEnd', { vid: vid }); LM.want = null; lmStop();
-      try { var p = mainPlayer(); if (p && p.loadVideoById) p.loadVideoById(vid); } catch (e) { /* ignore */ }
+      try { var p = mainPlayer(); if (p && p.loadVideoById) p.loadVideoById(vid, at0 > 3 ? at0 : 0); } catch (e) { /* ignore */ } // 듣던 자리부터 (예전엔 처음부터)
     });
     G.setLocalMedia(lmCmd);
     lmQuiet();
