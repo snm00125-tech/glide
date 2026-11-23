@@ -1986,6 +1986,7 @@
     lastGeom = '';
     G.setTimeout.call(W, function () { lastGeom = ''; reportGeom(); }, 450);
     if (BR && BR.open) { brClose(); return; } // 전체화면 밝기 바
+    if (typeof CMS !== 'undefined' && CMS) { mpCmClose(); return; }
     if (typeof LY !== 'undefined' && LY.el) { lyClose(); return; }
     if (MP && MP.sl) { mpSleepClose(); return; }
     if (QU && QU.sheet) { quSheetClose(); return; }
@@ -2474,7 +2475,7 @@
     var pop = role() === 'browse' && !!(GM && GM.menu);
     var np = role() === 'browse' && !!(GM && GM.open && NP && NP.shown && npActive());
     var gmo = role() === 'browse' && !!(GM && GM.open);
-    var hold = role() === 'player' && !!((typeof LY !== 'undefined' && LY.el) || (MP && MP.sl));
+    var hold = role() === 'player' && !!((typeof LY !== 'undefined' && LY.el) || (MP && MP.sl) || (typeof CMS !== 'undefined' && CMS));
     var sig = JSON.stringify([rect, innerWidth, innerHeight, sheet, top, chat, pop, hold, np, gmo]);
     if (sig === lastGeom) return;
     lastGeom = sig;
@@ -3873,6 +3874,7 @@
       plus: "%3Cpath d='M12 5v14M5 12h14' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round'/%3E",
       info: "%3Ccircle cx='12' cy='12' r='9' fill='none' stroke='%23000' stroke-width='2'/%3E%3Cpath d='M12 11v6M12 7.5v.5' stroke='%23000' stroke-width='2.2' stroke-linecap='round'/%3E",
       chat: "%3Cpath d='M4 5h16v11H9l-5 4z' fill='none' stroke='%23000' stroke-width='2' stroke-linejoin='round'/%3E",
+      thumb: "%3Cpath d='M7 10v10H3V10zM9 20V10l4.5-7c1.3 0 2.2 1.1 1.9 2.4L14.6 9H20c1.1 0 1.9 1 1.7 2.1l-1.5 7.2c-.2.9-1 1.7-2 1.7z' fill='none' stroke='%23000' stroke-width='1.8' stroke-linejoin='round'/%3E",
       dl: "%3Cpath d='M12 4v10M7 10l5 5 5-5M5 20h14' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E",
       tune: "%3Cpath d='M4 7h10M18 7h2M4 17h4M12 17h8' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='7' r='2' fill='none' stroke='%23000' stroke-width='2'/%3E%3Ccircle cx='10' cy='17' r='2' fill='none' stroke='%23000' stroke-width='2'/%3E",
       heart: "%3Cpath d='M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z' fill='none' stroke='%23000' stroke-width='2' stroke-linejoin='round'/%3E",
@@ -3916,12 +3918,13 @@
           var part = md && md.metadata && md.metadata.contentMetadataViewModel && md.metadata.contentMetadataViewModel.metadataRows;
           var ch = part && part[0] && part[0].metadataParts && part[0].metadataParts[0] && part[0].metadataParts[0].text && part[0].metadataParts[0].text.content;
           var lm = /"text":"(\d+:\d\d(?::\d\d)?)"/.exec(JSON.stringify(v.contentImage || {}));
-          if (title && !seen[v.contentId]) { seen[v.contentId] = 1; out.push(gmMake(v.contentId, title, ch, lm && lm[1])); }
+          var rows2 = part && part[1] && part[1].metadataParts ? part[1].metadataParts.map(function (p) { return p && p.text && p.text.content || ''; }).join(' ') : '';
+          if (title && !seen[v.contentId]) { seen[v.contentId] = 1; out.push(gmMake(v.contentId, title, ch, lm && lm[1], rows2, rows2)); }
           continue;
         }
         if ((k === 'videoWithContextRenderer' || k === 'videoRenderer' || k === 'compactVideoRenderer' || k === 'playlistVideoRenderer' || k === 'playlistPanelVideoRenderer') && v && v.videoId) {
           var nav = v.navigationEndpoint || {};
-          if (!nav.reelWatchEndpoint && !seen[v.videoId]) { seen[v.videoId] = 1; out.push(gmMake(v.videoId, recText(v.headline || v.title), recText(v.shortBylineText || v.longBylineText || v.ownerText), recText(v.lengthText))); }
+          if (!nav.reelWatchEndpoint && !seen[v.videoId]) { seen[v.videoId] = 1; out.push(gmMake(v.videoId, recText(v.headline || v.title), recText(v.shortBylineText || v.longBylineText || v.ownerText), recText(v.lengthText), recText(v.viewCountText || v.shortViewCountText), recText(v.publishedTimeText))); }
           continue;
         }
         if (k === 'continuationCommand' && v && v.token && !cont) cont = v.token;
@@ -3930,9 +3933,24 @@
     })(json, 0);
     return { items: out, cont: cont };
   }
-  function gmMake(id, title, ch, len) {
+  function gmMake(id, title, ch, len, views, age) {
     var c = gmClean(title, ch);
-    return { id: id, title: c.title, artist: c.artist || String(ch || ''), raw: String(title || ''), ch: String(ch || ''), len: len || '', secs: gmSecs(len) };
+    var o = { id: id, title: c.title, artist: c.artist || String(ch || ''), raw: String(title || ''), ch: String(ch || ''), len: len || '', secs: gmSecs(len) };
+    var vw = gmViews(views); if (vw >= 0) o.views = vw;
+    var ag = gmAge(age); if (ag >= 0) o.age = ag;
+    return o;
+  }
+  // '조회수 52만회' · '1.2M views' → 수 (없으면 -1)
+  function gmViews(t) {
+    var m = /([\d.,]+)\s*(천|만|억|K|M|B)?\s*(?:회|views?)/i.exec(String(t || '')); if (!m) return -1;
+    var n = parseFloat(m[1].replace(/,/g, '')), u = (m[2] || '').toUpperCase();
+    return Math.round(n * ({ '천': 1e3, '만': 1e4, '억': 1e8, K: 1e3, M: 1e6, B: 1e9 }[u] || 1));
+  }
+  // '3일 전' · '2 weeks ago' → 지난 초 (없으면 -1)
+  function gmAge(t) {
+    var m = /(\d+)\s*(초|분|시간|일|주|개월|달|년|second|minute|hour|day|week|month|year)/i.exec(String(t || '')); if (!m) return -1;
+    var k = m[2].toLowerCase(), u = { '초': 1, second: 1, '분': 60, minute: 60, '시간': 3600, hour: 3600, '일': 86400, day: 86400, '주': 604800, week: 604800, '개월': 2592000, '달': 2592000, month: 2592000, '년': 31536000, year: 31536000 }[k] || 0;
+    return (+m[1]) * u;
   }
   // 음악다운 길이만 (1분 30초 ~ 12분): 검색 결과의 쇼츠·몇 시간짜리 모음 영상 제외
   function gmSongLike(it) { return !it.secs || (it.secs >= 90 && it.secs <= 720); }
@@ -3985,6 +4003,125 @@
       if (GM_NOISE.test(raw)) sc -= 5;
       return { x: x, s: sc, i: i };
     }).sort(function (a, b) { return b.s - a.s || a.i - b.i; }).map(function (o) { return o.x; });
+  }
+  // 한글·영어 이름 짝 배우기: 검색 결과 제목·채널의 '기립 (GiiiRIP)', 'BIGBANG (빅뱅)' 같은 괄호 → 빅뱅 ↔ bigbang, 기립 ↔ giiirip
+  var GM_HAN = /[가-힣]/, GM_LAT = /[a-z]/;
+  var GM_ALIAS_SKIP = /lyrics?|가사|ver|live|라이브|커버|cover|feat|원곡|^mv$|official|audio|가수전|방송|\d{4}/;
+  function gmAliasLearn(al, list) {
+    var add = function (a, b) {
+      a = gmNorm(a); b = gmNorm(b);
+      if (!a || !b || a === b || a.length > 24 || b.length > 24) return;
+      if (!((GM_HAN.test(a) && GM_LAT.test(b)) || (GM_LAT.test(a) && GM_HAN.test(b)))) return; // 한글 ↔ 영어 짝만
+      if (GM_ALIAS_SKIP.test(a) || GM_ALIAS_SKIP.test(b)) return; // '밤편지 [가사/Lyrics]' 같은 꼬리표
+      // 두 번 넘게 나온 짝만 씀 (한 영상 제목의 우연한 괄호로 '밤편지 ↔ IU' 같은 엉뚱한 짝이 생겼었음 — 실제 사이트)
+      var c = al['#c'] || (al['#c'] = {}), k = a < b ? a + '|' + b : b + '|' + a;
+      c[k] = (c[k] || 0) + 1;
+      if (c[k] < 2) return;
+      (al[a] = al[a] || {})[b] = 1; (al[b] = al[b] || {})[a] = 1;
+    };
+    list.forEach(function (x) {
+      [x.raw, x.ch].forEach(function (t) {
+        var re = /([^()\[\]【】「」'"‘’“”|ㅣ\/:,_\-–]{1,40})[(\[]([^()\[\]]{1,30})[)\]]/g, m;
+        t = String(t || '');
+        while ((m = re.exec(t))) add(m[1], m[2]);
+      });
+    });
+    return al;
+  }
+  function gmHas(text, tok, al) {
+    if (text.indexOf(tok) !== -1) return true;
+    var a = al[tok]; if (!a) return false;
+    for (var k in a) if (text.indexOf(k) !== -1) return true;
+    return false;
+  }
+  // 낱말 단위로 맞추기: '기립'은 '기립 (GiiiRIP)'에는 맞고 '기립성 저혈압'·'기립경 검사'에는 안 맞음. 띄어 쓴 '좋은 날'은 '좋은날'과 맞음
+  function gmWords(t) { return String(t || '').toLowerCase().split(/[^0-9a-z가-힣]+/).filter(Boolean); }
+  function gmHasW(words, tok, al) {
+    var alt = al[tok] || {};
+    for (var i = 0; i < words.length; i++) {
+      var acc = '';
+      for (var j = i; j < words.length && j < i + 5; j++) {
+        if (words[j] === '|') break;
+        acc += words[j];
+        if (acc === tok || alt[acc]) return true;
+        if (acc.length > 32) break;
+      }
+    }
+    return false;
+  }
+  var GM_NOISE2 = /리뷰|review|음감회|해석|tutorial|튜토리얼|강좌|배우기|다이어트|챌린지|challenge|축가|히든싱어|패러디|parody|먹방|브이로그|vlog|unboxing|언박싱|close\s?up|직캠/i;
+  var GM_VARIANT = /원곡|original song|cover|커버|\b\d{6}\b|mama|in osaka|lyrics?|가사|버전|version|award|어워즈|시상식|축하공연|festival|가요제|가요대축제|performance|퍼포먼스|\bver\b|remix|리믹스|cover|커버|inst|instrumental|orchestra|오케스트라|국악|piano|피아노|acoustic|어쿠스틱|sped|slowed|reverb|nightcore|8d|loop|반복|1시간|1hour|live|라이브|무대|stage|edit|mashup|매시업/i;
+  // 검색 결과 정확도 순서: 검색어 낱말이 모두 맞는 곡만 (하나도 없으면 원래 방식), 원곡(제목이 검색어와 같음·공식 채널·Topic)이 위, 가사·커버·다른 버전은 그 아래, 뉴스·직캠은 빼거나 맨 아래
+  function gmRelevance(list, q, al, strict) {
+    var toks = String(q || '').toLowerCase().split(/\s+/).map(gmNorm).filter(Boolean);
+    if (!toks.length) return gmRank(list, q);
+    // 1) 곡마다 낱말이 어디서 맞는지 (가수 칸 = 채널·가수 이름, 아니면 제목)
+    var pre = list.map(function (x) {
+      var raw = String(x.raw || x.title || ''), chN = gmNorm(x.ch), arN = gmNorm(x.artist), meta = chN + '|' + arN, all = gmNorm(raw) + '|' + meta;
+      var wm = gmWords(String(x.ch || '') + ' ' + String(x.artist || '')), wa = gmWords(raw).concat(['|'], wm);
+      var m = {}; toks.forEach(function (t) { m[t] = gmHasW(wm, t, al) ? 'a' : gmHasW(wa, t, al) ? 't' : ''; });
+      return { raw: raw, chN: chN, arN: arN, m: m };
+    });
+    // 2) 가수 낱말: 맞는 곡들 중 40% 넘게 가수 칸에서 맞으면 (빅뱅·아이유·뉴진스). 나머지는 노래 제목 낱말
+    var isArt = {};
+    toks.forEach(function (t) { var n = 0, na = 0; pre.forEach(function (p) { if (p.m[t]) { n++; if (p.m[t] === 'a') na++; } }); isArt[t] = n > 0 && na / n >= 0.4; });
+    var titleQ = toks.some(function (t) { return !isArt[t]; }); // 제목을 찾는 검색 (가수만 찾으면 유튜브 순서를 거의 그대로)
+    var scored = list.map(function (x, i) {
+      var p = pre[i], raw = p.raw, chN = p.chN, arN = p.arN;
+      var hit = toks.filter(function (t) { return p.m[t]; }).length;
+      var sc = 0;
+      if (titleQ) {
+        // 남는 글자: 제목에서 괄호·태그·검색어(와 짝 이름)·가수 이름을 지우고 남은 것 = 원곡과 다른 정도 (0 이면 원곡 그 자체)
+        var rest = gmNorm(raw.replace(/[(\[【「][^()\[\]【】「」]*[)\]】」]/g, ' ').replace(/[|ㅣ].*$/, ' ').replace(/official|audio|video|m\/?v|music|lyrics?|가사|뮤직비디오|visualizer|teaser|hd|4k/gi, ' '));
+        var cut = function (w) { if (w && w.length >= 2) rest = rest.split(w).join(''); };
+        toks.forEach(function (t) { cut(t); if (al[t]) Object.keys(al[t]).forEach(cut); });
+        [chN, arN].forEach(function (w) { cut(w); if (al[w]) Object.keys(al[w]).forEach(cut); });
+        cut(gmNorm(String(x.ch || '').replace(/\s*-\s*Topic$/i, '')));
+        gmWords(String(x.ch || '') + ' ' + String(x.artist || '')).forEach(function (w) { if (w !== 'topic') { cut(w); if (al[w]) Object.keys(al[w]).forEach(cut); } }); // 'NewJeans (뉴진스)'처럼 낱말로 나뉜 가수 이름
+        var lyr = /lyrics?|가사/i.test(raw), vari = GM_VARIANT.test(raw.replace(/lyrics?|가사/gi, ''));
+        if (!rest.length) sc += vari ? 3 : lyr ? 6 : 9; // 원곡 > 원곡 가사 영상 > 다른 버전
+        else if (rest.length <= 4) sc += vari ? 1 : 3;
+        sc -= Math.min(8, rest.length / 3);
+        if (vari) sc -= 3;
+      }
+      // 찾는 가수가 제목에만 있고 가수 칸(채널·'가수 - 제목')에 없으면 남이 부른 것일 가능성 (커버·예능)
+      toks.forEach(function (t) { if (isArt[t] && p.m[t] === 't') sc -= 4; });
+      if (/-\s*Topic$/i.test(x.ch)) sc += 4;
+      // 가수 공식 채널: 채널 이름에서 가수 낱말(과 짝 이름)을 지우면 남는 게 없음 (BIGBANG · BIGBANG (빅뱅) · IU Official)
+      var chRest = gmNorm(String(x.ch || '').replace(/\s*-\s*Topic$/i, '').replace(/official|vevo|공식/gi, ''));
+      var artHit = false;
+      toks.forEach(function (t) { if (!isArt[t]) return; [t].concat(al[t] ? Object.keys(al[t]) : []).forEach(function (w) { if (w.length >= 2 && chRest.indexOf(w) !== -1) { chRest = chRest.split(w).join(''); artHit = true; } }); });
+      if (artHit && chRest.length <= 2) sc += 4;
+      if (/vevo$|official|공식/i.test(x.ch)) sc += 2;
+      if (/official\s*(audio|m\/?v|video)|\bm\/?v\b|뮤직비디오/i.test(raw)) sc += 1;
+      if (x.views > 0) sc += Math.min(3, Math.max(0, Math.log(x.views) / Math.LN10 - 4)); // 많이 들은 곡이 원곡일 가능성 (10만 +1 · 100만 +2 · 1000만 +3)
+      var noise = GM_NOISE.test(raw) || GM_NOISE2.test(raw); if (noise) sc -= 8;
+      return { x: x, s: sc, i: i, hit: hit, noise: noise, rest: titleQ ? rest.length : 0, vari: titleQ ? vari : false, both: titleQ && toks.every(function (t) { return isArt[t] || !al[t] || Object.keys(al[t]).some(function (k) { return gmHasW(gmWords(raw), k, {}); }) && gmHasW(gmWords(raw), t, {}); }), ar: [chN, arN, gmNorm(String(x.ch || '').replace(/\s*-\s*Topic$/i, '').replace(/\s*[\[(].*$/, ''))] };
+    });
+    var full = scored.filter(function (o) { return o.hit === toks.length; });
+    if (!full.length) return strict ? [] : gmRank(list, q); // 이름 짝을 못 배운 경우 등: 예전 방식 (더 불러오기는 빈 목록)
+    var clean = full.filter(function (o) { return !o.noise; });
+    if (clean.length >= 5) full = clean; // 노래가 충분하면 뉴스·직캠·반응 영상은 뺌
+    if (titleQ) {
+      var crew = {};
+      full.forEach(function (o) { if (!o.rest && !o.vari && !o.noise) o.ar.forEach(function (a) { if (a && a.length >= 2) crew[a] = 1; }); });
+      var inCrew = function (o) { return o.ar.some(function (a) { if (!a) return false; for (var c in crew) if (a === c || a.indexOf(c) !== -1 || c.indexOf(a) !== -1) return true; return false; }); };
+      var song = full.filter(function (o) { return inCrew(o) || o.both || o.rest <= 4; });
+      if (song.length >= 3) full = song;
+    }
+    return full.sort(function (a, b) { return b.s - a.s || a.i - b.i; }).map(function (o) { return o.x; });
+  }
+  // 정렬 필터: 정확도(위 순서 그대로) · 최신순 · 조회수순 (정보가 없는 곡은 뒤로, 같으면 정확도 순)
+  var GM_SORTS = [['rel', '정확도순'], ['new', '최신순'], ['view', '조회수순']];
+  function gmSortList(rel, k) {
+    if (k !== 'new' && k !== 'view') return rel.slice();
+    return rel.map(function (x, i) { return { x: x, i: i }; }).sort(function (a, b) {
+      var va = k === 'new' ? a.x.age : a.x.views, vb = k === 'new' ? b.x.age : b.x.views;
+      var ha = va != null, hb = vb != null;
+      if (ha !== hb) return ha ? -1 : 1;
+      if (ha && va !== vb) return k === 'new' ? va - vb : vb - va;
+      return a.i - b.i;
+    }).map(function (o) { return o.x; });
   }
   // 노래 찾기: 4분 이하·4~20분 영상을 따로 찾아 번갈아 합침 (그냥 찾으면 몇 시간짜리 모음 영상이 대부분이라 장르 목록이 거의 비었음 — 실제 사이트 검사).
   // pages: 필터마다 몇 묶음까지 (검색 화면 3, 장르·가수 1). 다음 묶음 토큰은 GM.sconts[q] 에 (끝까지 내리면 더 불러오기)
@@ -4137,6 +4274,8 @@
   }
   G.onCommand('openMusic', function (a) {
     if (role() !== 'browse' || !gmOn()) return;
+    // 위젯 ▶ (재생 중이 아닐 때): 마지막에 듣던 곡부터 바로 (음악 탭 아래 막대의 ▶와 같은 곡)
+    if (a && a.resume) { var l = npLast(); if (l) { gmPlay(l.list, l.i, false); return; } }
     if (REC && REC.open) recClose();
     if (!GM.open) gmOpen();
     if (a && a.search && GM.input) { GM.stack = []; G.setTimeout.call(W, function () { try { GM.input.focus(); GM.input.select(); gmSugShow(); } catch (e) { /* ignore */ } }, 150); }
@@ -4475,6 +4614,7 @@
       '.gm-seg{display:flex;gap:8px;padding:14px 16px 4px}' +
       '.gm-seg button{all:unset;padding:7px 14px;border-radius:17px;background:' + CH + ';font:600 13px/1 ' + F + ';cursor:pointer}' +
       '.gm-seg button[aria-pressed=true]{background:' + T1 + ';color:' + BG + '}' +
+      '.gm-seg.gm-sort{padding:2px 16px 6px}.gm-resort{animation:gmresort .22s cubic-bezier(.2,0,0,1) both}@keyframes gmresort{from{opacity:0;transform:translateY(6px)}}' +
       '.gm-head{display:flex;align-items:flex-end;gap:10px;padding:16px 16px 6px}' +
       '.gm-head div{flex:1;min-width:0}.gm-head h2{margin:0;font:800 20px/1.25 ' + F + '}.gm-head p{margin:3px 0 0;font:400 12px/1.4 ' + F + ';color:' + T2 + '}' +
       '.gm-acts{display:flex;gap:8px;padding:8px 16px 10px}' +
@@ -5146,10 +5286,28 @@
       gmGet('q:' + q, function () { return gmSearchSongs(q, 3).then(gmDedupe); }).then(function (list) {
         if (token !== GM.token) return;
         load.remove();
-        list = gmRank(gmPure(list), q);
+        var al = gmAliasLearn({}, list), rel = gmRelevance(gmPure(list), q, al, true), strictMore = true;
+        if (!rel.length) { rel = gmRank(gmPure(list), q); strictMore = false; } // 맞는 곡이 없으면 예전 방식
+        list = gmSortList(rel, GM.ssort);
         var cnt = G.el('p', { text: '검색 결과 ' + list.length + '곡' });
         body.appendChild(G.el('div', { 'class': 'gm-head' }, [G.el('div', {}, [G.el('h2', { text: '‘' + q + '’' }), cnt])]));
         if (!list.length) { body.appendChild(G.el('div', { 'class': 'gm-note', text: '찾은 노래가 없어요' })); return; }
+        var seg = G.el('div', { 'class': 'gm-seg gm-sort' });
+        GM_SORTS.forEach(function (o) {
+          var b = G.el('button', { type: 'button', 'aria-pressed': String((GM.ssort || 'rel') === o[0]), text: o[1] });
+          b.addEventListener('click', function (e) {
+            e.preventDefault(); e.stopPropagation();
+            if ((GM.ssort || 'rel') === o[0]) return;
+            G.send('haptic', { kind: 'gesture' });
+            GM.ssort = o[0];
+            [].forEach.call(seg.children, function (c) { c.setAttribute('aria-pressed', String(c === b)); });
+            var sorted = gmSortList(rel, GM.ssort);
+            list.splice.apply(list, [0, list.length].concat(sorted)); // 전체 듣기·곡 줄이 같은 배열을 봄
+            var nb = gmList(list, false); nb.classList.add('gm-resort'); box.replaceWith(nb); box = nb;
+          }, true);
+          seg.appendChild(b);
+        });
+        body.appendChild(seg);
         body.appendChild(gmActs(list));
         var box = gmList(list, false), tail = G.el('div', { 'class': 'gm-load', text: '' });
         body.appendChild(box); body.appendChild(tail);
@@ -5162,8 +5320,11 @@
             busy = false;
             if (token !== GM.token) return;
             var have = {}; list.forEach(function (x) { have[gmKey(x)] = 1; have[x.id] = 1; });
-            var add = gmRank(gmPure(gmDedupe(more)).filter(function (x) { return !have[x.id] && !have[gmKey(x)]; }), q);
-            add.forEach(function (x) { list.push(x); box.appendChild(gmRow(list, list.length - 1, 0)); });
+            gmAliasLearn(al, more);
+            var add = gmRelevance(gmPure(gmDedupe(more)).filter(function (x) { return !have[x.id] && !have[gmKey(x)]; }), q, al, strictMore);
+            rel = rel.concat(add);
+            if ((GM.ssort || 'rel') === 'rel') add.forEach(function (x) { list.push(x); box.appendChild(gmRow(list, list.length - 1, 0)); });
+            else if (add.length) { var sorted2 = gmSortList(rel, GM.ssort); list.splice.apply(list, [0, list.length].concat(sorted2)); var nb2 = gmList(list, false); box.replaceWith(nb2); box = nb2; }
             if (GM.sel) gmSelPaint();
             cnt.textContent = '검색 결과 ' + list.length + '곡';
             var c = (GM.sconts || {})[q];
@@ -5309,7 +5470,18 @@
       '#glide-mp .lyb .pxd{margin:0;white-space:pre-wrap;word-break:break-word;font:400 14px/1.6 ' + F + ';color:rgba(255,255,255,.78)}' +
       '#glide-mp .cm{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06)}#glide-mp .cm img{flex:none;width:32px;height:32px;border-radius:16px;background:rgba(255,255,255,.1)}#glide-mp .cm div{min-width:0}' +
       '#glide-mp .cm small{display:block;font:500 12px/1.3 ' + F + ';color:rgba(255,255,255,.5)}#glide-mp .cm p{margin:4px 0 0;font:400 14px/1.5 ' + F + ';color:rgba(255,255,255,.88);white-space:pre-wrap;word-break:break-word;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden}#glide-mp .cm p.open{display:block}#glide-mp .cm span{display:block;margin-top:5px;font:500 12px/1 ' + F + ';color:rgba(255,255,255,.5)}' +
-      '#glide-mp .chip.ad i{-webkit-mask-image:url("' + gmIcon('plus') + '")}' +
+      '#glide-mp .chip.ad i{-webkit-mask-image:url("' + gmIcon('plus') + '")}#glide-mp .chip.cmc i{-webkit-mask-image:url("' + gmIcon('chat') + '")}' +
+      '#glide-mp .cms{position:absolute;left:0;right:0;bottom:0;z-index:8;display:flex;flex-direction:column;border-radius:16px 16px 0 0;background:#1a1a1f;box-shadow:0 -6px 24px rgba(0,0,0,.35);will-change:transform;overscroll-behavior:contain}' +
+      '#glide-mp .cmhd{flex:none;touch-action:none}#glide-mp .cmg{width:36px;height:4px;margin:8px auto 4px;border-radius:2px;background:rgba(255,255,255,.28)}' +
+      '#glide-mp .cmt{display:flex;align-items:center;gap:8px;padding:4px 8px 6px 18px}#glide-mp .cmt b{font:800 17px/1.3 ' + F + '}#glide-mp .cmt span{flex:1;font:500 14px/1.3 ' + F + ';color:rgba(255,255,255,.55)}' +
+      '#glide-mp .cmx{all:unset;flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:20px;cursor:pointer}#glide-mp .cmx:active{background:rgba(255,255,255,.1)}#glide-mp .cmx i{width:20px;height:20px;background-color:#fff;-webkit-mask:url("' + gmIcon('close') + '") center/20px 20px no-repeat}' +
+      '#glide-mp .cmso{flex:none;display:flex;gap:8px;padding:2px 18px 10px;border-bottom:1px solid rgba(255,255,255,.07)}#glide-mp .cmso button{all:unset;padding:7px 12px;border-radius:8px;background:rgba(255,255,255,.1);font:600 13px/1 ' + F + ';color:rgba(255,255,255,.85);cursor:pointer}#glide-mp .cmso button[aria-pressed=true]{background:#fff;color:#111}' +
+      '#glide-mp .cmbd{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:4px 0 calc(16px + env(safe-area-inset-bottom))}' +
+      '#glide-mp .cmr{display:flex;gap:12px;padding:10px 18px}#glide-mp .cmr img{flex:none;width:28px;height:28px;border-radius:14px;background:rgba(255,255,255,.1)}#glide-mp .cmr>div{flex:1;min-width:0}' +
+      '#glide-mp .cmr small{display:block;font:500 12px/1.3 ' + F + ';color:rgba(255,255,255,.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+      '#glide-mp .cmr p{margin:3px 0 0;font:400 14px/1.45 ' + F + ';color:rgba(255,255,255,.92);white-space:pre-wrap;word-break:break-word;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}#glide-mp .cmr p.open{display:block}' +
+      '#glide-mp .cmf{display:flex;align-items:center;gap:6px;margin-top:6px;font:500 12px/1 ' + F + ';color:rgba(255,255,255,.6)}#glide-mp .cmf i{width:15px;height:15px;background-color:rgba(255,255,255,.7);-webkit-mask:url("' + gmIcon('thumb') + '") center/15px 15px no-repeat}#glide-mp .cmf em{margin-left:14px;font-style:normal;color:#9cc4ff}' +
+      '#glide-mp .cmn{padding:40px 0;text-align:center;font:500 14px/1.5 ' + F + ';color:rgba(255,255,255,.55)}' +
       '#glide-mp .sl .plnew{color:#DDF46A}#glide-mp .sl .plrow{display:flex;align-items:center;gap:12px;padding:8px 10px}#glide-mp .sl .plrow span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#glide-mp .sl .plrow small{font:500 12px/1 ' + F + ';color:rgba(255,255,255,.5)}' +
       '#glide-mp .sl .plrow .pl-cv{position:relative;flex:none;width:40px;height:40px;border-radius:8px;overflow:hidden;background:rgba(255,255,255,.1);display:grid}#glide-mp .sl .plrow .pl-cv.q{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}#glide-mp .sl .plrow .pl-cv img{width:100%;height:100%;object-fit:cover;display:block}#glide-mp .sl .plrow .pl-cv i{display:none}' +
       '#glide-mp .sl .plform{display:flex;gap:8px;padding:6px 0}#glide-mp .sl .plform input{all:unset;flex:1;min-width:0;height:44px;padding:0 14px;border-radius:12px;background:rgba(255,255,255,.1);font:500 15px/1 ' + F + ';color:#fff}' +
@@ -5348,6 +5520,9 @@
     // 좋아요(유튜브 좋아요 · 수) · 비슷한 곡 믹스 (멜론의 ♡ · 믹스업 자리)
     MP.like = G.el('button', { type: 'button', 'class': 'chip lk', 'aria-label': '좋아요' }, [G.el('i'), G.el('span', { text: '좋아요' })]);
     MP.like.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); mpLike(); }, true);
+    MP.cmT = G.el('span', { text: '댓글' });
+    MP.cmb = G.el('button', { type: 'button', 'class': 'chip cmc', 'aria-label': '댓글' }, [G.el('i'), MP.cmT]);
+    MP.cmb.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); G.send('haptic', { kind: 'gesture' }); mpComments(); }, true);
     MP.addb = G.el('button', { type: 'button', 'class': 'chip ad' }, [G.el('i'), G.el('span', { text: '담기' })]);
     MP.addb.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); G.send('haptic', { kind: 'gesture' }); mpPlPick(); }, true);
     MP.mixb = G.el('button', { type: 'button', 'class': 'chip mx' }, [G.el('i'), G.el('span', { text: '믹스' })]);
@@ -5368,7 +5543,7 @@
     MP.el = G.el('div', { id: 'glide-mp', 'data-glide': 'music', hidden: '' }, [
       MP.bg, MP.art,
       G.el('div', { 'class': 'info' }, [MP.title, MP.artist]),
-      G.el('div', { 'class': 'chips' }, [MP.like, MP.addb, MP.mixb]),
+      G.el('div', { 'class': 'chips' }, [MP.like, MP.cmb, MP.addb, MP.mixb]),
       MP.slt,
       mpPaneBuild(),
       MP.bar, G.el('div', { 'class': 'tm' }, [MP.t1, MP.local, MP.t2]),
@@ -5636,6 +5811,7 @@
         if (o.factoidRenderer) { var fv = recText(o.factoidRenderer.value), fl = recText(o.factoidRenderer.label); if (fv && !d.facts.some(function (f) { return f[1] === fl; })) d.facts.push([fv, fl]); }
         if (o.attributedDescriptionBodyText && !d.desc) d.desc = recText(o.attributedDescriptionBodyText);
         if (o.continuationCommand && !d.ctok && /^Eg0S/.test(o.continuationCommand.token || '')) d.ctok = o.continuationCommand.token;
+        if (o.contextualInfo && !d.ccount) d.ccount = recText(o.contextualInfo);
         for (var k in o) walk(o[k], depth + 1);
       })(j, 0);
       return d;
@@ -5664,33 +5840,141 @@
       if (d.desc) body.appendChild(G.el('pre', { 'class': 'pxd', text: d.desc }));
     }, function () { recClear(body); body.appendChild(G.el('div', { 'class': 'lyn', text: '정보를 받지 못했어요' })); });
   }
+  // ---- 댓글 창 (2026-11-23 사용자: "좋아요 옆 댓글, 누르면 아래 창에 노래 댓글만, 모션은 유튜브 앱처럼") ----
+  // 유튜브 앱: 영상(여기선 앨범) 바로 아래부터 화면 끝까지 올라오는 창, 뒤는 어둡게 하지 않음. 손잡이·머리를 끌면 손가락을 따라 내려가고
+  // 빠르게 내리거나 4분의 1 넘게 내리면 닫힘, 아니면 제자리. 목록이 맨 위일 때 아래로 끌어도 같음. 정렬 인기순·최신순(첫 쪽 토큰의 정렬 값 csFlip)
+  var CMS = null;
+  function mpCmCount(v) {
+    if (!MP.cmT) return;
+    MP.cmT.textContent = '댓글';
+    mpNextData(v).then(function (d) { if (mpVid() === v && d.ccount) MP.cmT.textContent = d.ccount; }, function () { /* ignore */ });
+  }
+  function mpCmClose(fast) {
+    var c = CMS; if (!c) return; CMS = null;
+    lastGeom = ''; G.setTimeout.call(W, reportGeom, 0);
+    var el = c.el;
+    el.style.transition = 'transform ' + (fast ? 150 : 220) + 'ms cubic-bezier(.4,0,1,1)';
+    el.style.transform = 'translateY(100%)';
+    G.setTimeout.call(W, function () { el.remove(); }, 260);
+  }
+  function mpCmTok(tok, vid, sort) {
+    if (sort !== 'new') return tok;
+    var old = CS.vid; CS.vid = vid;
+    try { return csFlip(tok) || tok; } catch (e) { return tok; } finally { CS.vid = old; }
+  }
   function mpComments() {
-    var v = mpVid(), info = mpInfo(v), body = mpPanel('댓글', info.title || '');
-    var more = null, busy = false;
-    var load = function (tok) {
-      if (!tok || busy) return; busy = true;
-      yti('next', { continuation: tok }).then(function (j) {
-        busy = false;
-        if (LY.vid !== v || !LY.el) return;
-        var first = !!body.querySelector('.lyn'); if (first) recClear(body);
-        var n = 0; more = null;
+    if (CMS) { mpCmClose(); return; }
+    lyClose(); if (MP.sl) mpSleepClose();
+    var v = mpVid();
+    // 앨범 바로 아래부터 (너무 낮거나 높으면 화면의 30~48% 지점)
+    var H = MP.el.clientHeight || innerHeight, ar = MP.art.getBoundingClientRect(), er = MP.el.getBoundingClientRect();
+    var top = Math.round(Math.min(H * 0.48, Math.max(H * 0.3, ar.bottom - er.top)));
+    var cnt = G.el('span', { text: '' });
+    var close = G.el('button', { type: 'button', 'class': 'cmx', 'aria-label': '닫기' }, [G.el('i')]);
+    close.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); mpCmClose(); }, true);
+    var head = G.el('div', { 'class': 'cmhd' }, [G.el('div', { 'class': 'cmg' }), G.el('div', { 'class': 'cmt' }, [G.el('b', { text: '댓글' }), cnt, close])]);
+    var sortBar = G.el('div', { 'class': 'cmso' });
+    var body = G.el('div', { 'class': 'cmbd' });
+    var el = G.el('div', { 'class': 'cms', 'data-glide': 'music', role: 'dialog', style: 'top:' + top + 'px' }, [head, sortBar, body]);
+    var c = CMS = { el: el, body: body, vid: v, sort: 'top', more: null, busy: false, gen: 0 };
+    var note = function (t) { recClear(body); body.appendChild(G.el('div', { 'class': 'cmn', text: t })); };
+    var row = function (cr) {
+      var th = cr.authorThumbnail && cr.authorThumbnail.thumbnails, img = th && th.length ? th[0].url : '';
+      var p = G.el('p', { text: recText(cr.contentText) });
+      p.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); p.classList.toggle('open'); }, true);
+      var likes = recText(cr.voteCount), reps = cr.replyCount ? String(cr.replyCount) : '';
+      return G.el('div', { 'class': 'cmr' }, [G.el('img', { src: recUrl(img), alt: '', loading: 'lazy' }), G.el('div', {}, [
+        G.el('small', { text: recText(cr.authorText) + ' · ' + recText(cr.publishedTimeText) }), p,
+        G.el('div', { 'class': 'cmf' }, [G.el('i'), G.el('span', { text: likes || '' }), reps ? G.el('em', { text: '답글 ' + reps + '개' }) : null])])]);
+    };
+    var load = function (tok, first) {
+      if (!tok || c.busy) return; c.busy = true;
+      var gen = c.gen;
+      yti('next', { continuation: first ? mpCmTok(tok, v, c.sort) : tok }).then(function (j) {
+        c.busy = false;
+        if (CMS !== c || gen !== c.gen) return;
+        if (first) recClear(body);
+        var n = 0; c.more = null;
         (function walk(o, depth) {
           if (!o || typeof o !== 'object' || depth > 30) return;
-          if (o.commentRenderer) {
-            var c = o.commentRenderer, th = c.authorThumbnail && c.authorThumbnail.thumbnails, img = th && th.length ? th[0].url : '';
-            body.appendChild(G.el('div', { 'class': 'cm' }, [G.el('img', { src: recUrl(img), alt: '', loading: 'lazy' }), G.el('div', {}, [
-              G.el('small', { text: recText(c.authorText) + ' · ' + recText(c.publishedTimeText) }), (function () { var p = G.el('p', { text: recText(c.contentText) }); p.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); p.classList.toggle('open'); }, true); return p; })(),
-              recText(c.voteCount) ? G.el('span', { text: '♡ ' + recText(c.voteCount) }) : null])]));
-            n++; return;
-          }
-          if (o.continuationItemRenderer) { var ce = JSON.stringify(o.continuationItemRenderer).match(/"token":"([^"]+)"/); if (ce) more = ce[1]; return; }
+          if (o.commentRenderer) { body.appendChild(row(o.commentRenderer)); n++; return; }
+          if (o.continuationItemRenderer) { var ce = JSON.stringify(o.continuationItemRenderer).match(/"token":"([^"]+)"/); if (ce) c.more = ce[1]; return; }
           for (var k in o) walk(o[k], depth + 1);
         })(j, 0);
-        if (first && !n) body.appendChild(G.el('div', { 'class': 'lyn', text: '댓글이 없거나 꺼져 있어요' }));
-      }, function () { busy = false; if (!body.children.length || body.querySelector('.lyn')) { recClear(body); body.appendChild(G.el('div', { 'class': 'lyn', text: '댓글을 받지 못했어요' })); } });
+        if (first && !n) note('댓글이 없거나 꺼져 있어요');
+      }, function () { c.busy = false; if (CMS === c && first) note('댓글을 받지 못했어요'); });
     };
-    body.addEventListener('scroll', function () { if (more && body.scrollTop + body.clientHeight > body.scrollHeight - 400) load(more); }, { passive: true });
-    mpNextData(v).then(function (d) { if (d.ctok) load(d.ctok); else { recClear(body); body.appendChild(G.el('div', { 'class': 'lyn', text: '댓글이 없거나 꺼져 있어요' })); } }, function () { recClear(body); body.appendChild(G.el('div', { 'class': 'lyn', text: '댓글을 받지 못했어요' })); });
+    var start = function () {
+      c.gen++; c.busy = false; c.more = null; body.scrollTop = 0;
+      note('불러오는 중…');
+      mpNextData(v).then(function (d) {
+        if (CMS !== c) return;
+        cnt.textContent = d.ccount || '';
+        if (d.ctok) load(d.ctok, true); else note('댓글이 없거나 꺼져 있어요');
+      }, function () { if (CMS === c) note('댓글을 받지 못했어요'); });
+    };
+    [['top', '인기순'], ['new', '최신순']].forEach(function (o) {
+      var bt = G.el('button', { type: 'button', 'aria-pressed': String(o[0] === 'top'), text: o[1] });
+      bt.addEventListener('click', function (e) {
+        e.preventDefault(); e.stopPropagation();
+        if (c.sort === o[0]) return;
+        G.send('haptic', { kind: 'gesture' });
+        c.sort = o[0];
+        [].forEach.call(sortBar.children, function (x) { x.setAttribute('aria-pressed', String(x === bt)); });
+        start();
+      }, true);
+      sortBar.appendChild(bt);
+    });
+    body.addEventListener('scroll', function () { if (c.more && body.scrollTop + body.clientHeight > body.scrollHeight - 500) load(c.more, false); }, { passive: true });
+    // 끌어서 닫기 (유튜브 앱처럼 손가락을 따라감)
+    var y0 = null, dy = 0, drag = false, fromBody = false, lastY = 0, lastT = 0, vel = 0;
+    el.addEventListener('touchstart', function (e) {
+      if (e.touches.length !== 1) { y0 = null; return; }
+      fromBody = !!(e.target.closest && e.target.closest('.cmbd'));
+      if (fromBody && body.scrollTop > 0) { y0 = null; return; }
+      if (e.target.closest && e.target.closest('.cmso, .cmx')) { y0 = null; return; }
+      y0 = lastY = e.touches[0].clientY; lastT = Date.now(); dy = 0; drag = false; vel = 0;
+    }, { passive: true });
+    el.addEventListener('touchmove', function (e) {
+      if (y0 === null) return;
+      var y = e.touches[0].clientY, d = y - y0, now = Date.now();
+      if (!drag) {
+        if (fromBody && d < 0) { y0 = null; return; } // 위로 = 목록 스크롤
+        if (Math.abs(d) < 6) return;
+        drag = true; el.style.transition = 'none';
+      }
+      if (e.cancelable) e.preventDefault();
+      dy = Math.max(0, d);
+      if (now > lastT) { vel = (y - lastY) / (now - lastT); lastY = y; lastT = now; }
+      el.style.transform = 'translateY(' + dy + 'px)';
+    }, { passive: false });
+    var end = function () {
+      if (y0 === null) return;
+      y0 = null;
+      if (!drag) return;
+      drag = false;
+      var h = el.offsetHeight || 1;
+      if (dy > h * 0.25 || vel > 0.6) {
+        CMS = null; lastGeom = ''; G.setTimeout.call(W, reportGeom, 0);
+        var ms = Math.max(120, Math.min(260, (h - dy) / Math.max(vel, 1.2)));
+        el.style.transition = 'transform ' + Math.round(ms) + 'ms cubic-bezier(.2,0,.4,1)';
+        el.style.transform = 'translateY(' + (h + 20) + 'px)';
+        G.setTimeout.call(W, function () { el.remove(); }, ms + 40);
+      } else {
+        el.style.transition = 'transform 220ms cubic-bezier(.2,0,0,1)';
+        el.style.transform = 'translateY(0)';
+      }
+    };
+    el.addEventListener('touchend', end, { passive: true });
+    el.addEventListener('touchcancel', end, { passive: true });
+    MP.el.appendChild(el);
+    // 아래에서 올라옴 (약 0.28초 감속)
+    el.style.transform = 'translateY(100%)';
+    void el.offsetHeight;
+    el.style.transition = 'transform 280ms cubic-bezier(.2,0,0,1)';
+    el.style.transform = 'translateY(0)';
+    lastGeom = ''; reportGeom();
+    start();
   }
   // ---- 가사 미리보기: 곡이 바뀌면 가사를 찾아 둠(LRCLIB, 이 폰에 보관), 시간 가사는 앞·지금·다음 줄 ----
   function lpLoad(vid) {
@@ -5825,6 +6109,8 @@
     if (v !== MP.vid) {
       MP.vid = v;
       if (LY.el) lyClose();
+      if (CMS) mpCmClose(true);
+      mpCmCount(v);
       lpLoad(v);
       mpLikeLoad(v);
       mpLikeDraw();
