@@ -17,7 +17,7 @@
 (function () {
   'use strict';
 
-  var CORE_VERSION = '1.0.1';
+  var CORE_VERSION = '1.0.2';
   var CORE_API = 2; // filters.json의 minCore와 비교
 
   var W = window;
@@ -1602,6 +1602,9 @@
     // 음악: 곡마다 처음 한 번 144p (이어보기 위치가 있어도 — 음악은 처음부터 재생하므로 at 은 보지 않음)
     // (속성이 첫 재생보다 늦게 붙어 이미 다른 화질로 정했어도 한 번은 144p로 바꿈)
     if (music && qualityDone === vid + '144') return;
+    // 이미 재생 중인 곡은 바꾸지 않음: 재생 중 화질 변경 = 유튜브가 처음부터 다시 불러옴 (1.5.5). 설정을 다시 받으면 qualityDone 이 지워져
+    // 앱을 앞으로 띄운 뒤의 'playing' 에서 곡 중간에 144p를 다시 걸어 노래가 처음으로 돌아갔음 (사용자 제보 2026-11-23)
+    if (music && (at > 2 || inProgress(vid))) return;
     if (!music && listen && (qualityVid === vid || at > 2 || inProgress(vid))) { qualityVid = vid; return; } // 이미 시작한 영상(이어보기 위치 포함): 그대로 둠
     // 화질을 이미 정했고 본편이 재생 중인 영상: 설정(와이파이·데이터 화질)이 바뀌어도 그대로, 다음 영상부터 (재생 중 화질 변경 = 처음부터 다시 불러옴, 1.5.5)
     if (!music && decidedVid === vid && inProgress(vid)) return;
@@ -1757,6 +1760,10 @@
   // 저장된 곡 재생(Glide Music): 유튜브 영상 대신 페이지의 소리 요소가 재생하는 동안은 그쪽이 상태를 알리고 조작을 받음
   var localMedia = null;
   function setLocalMedia(h) { localMedia = typeof h === 'function' ? h : null; lastMedia = ''; }
+  // 음악 재생 중: 알림·잠금화면 정보(정리한 제목·가수, 반복·좋아요 상태)를 페이지가 덧씌움
+  var mediaMeta = null;
+  function setMediaMeta(h) { mediaMeta = typeof h === 'function' ? h : null; lastMedia = ''; }
+  function mediaRefresh() { lastMedia = ''; var p = mainPlayer(), v = videoOf(p) || document.querySelector('video'); if (v && p) mediaReport(v, p, 'pause'); }
   function mediaReport(v, p, type) {
     if (localMedia) return;
     // seeked·ratechange: 잠금화면·알림의 진행 위치는 마지막 보고 위치와 배속으로 계산되므로 이동·배속 변화도 알림
@@ -1775,7 +1782,8 @@
     }
     if (!data.title) data.title = document.title.replace(/ - YouTube$/, '');
     if (vid) data.artwork = 'https://i.ytimg.com/vi/' + vid + '/hqdefault.jpg';
-    var sig = data.state + data.videoId + data.title + data.ad;
+    if (mediaMeta) { try { var mo = mediaMeta(vid); if (mo) for (var mk in mo) data[mk] = mo[mk]; } catch (e) { /* ignore */ } }
+    var sig = data.state + data.videoId + data.title + data.ad + (data.music ? nativeStringify(data.music) : '');
     if (sig === lastMedia && type !== 'pause' && type !== 'playing' && type !== 'seeked' && type !== 'ratechange') return;
     lastMedia = sig;
     send('media', data);
@@ -1873,7 +1881,7 @@
         mainPlayer: mainPlayer, playerOf: playerOf, videoOf: videoOf, isMainPlayer: isMainPlayer,
         isAdShowing: isAdShowing, inAd: function () { return SK.inAd; },
         afterAd: function () { return perf() < SK.guardUntil; },
-        urlVideoId: urlVideoId, currentVideoId: currentVideoId, musicNow: musicNow, setLocalMedia: setLocalMedia,
+        urlVideoId: urlVideoId, currentVideoId: currentVideoId, musicNow: musicNow, setLocalMedia: setLocalMedia, setMediaMeta: setMediaMeta, mediaRefresh: mediaRefresh,
         videoMeta: function (id) { return (id && videoMeta.get(id)) || null; },
         getPath: getPath, setTimeout: nativeSetTimeout, clearTimeout: nativeClearTimeout,
         parse: nativeParse, stringify: nativeStringify, disguise: disguise, el: makeEl
