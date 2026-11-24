@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "2026.11.24.2",
+  "version": "2026.11.24.3",
   "minCore": 2,
   "updateUrl": "https://raw.githubusercontent.com/snm00125-tech/glide/main/core/filters.json",
   "note": "유튜브 구조가 바뀌면 이 파일만 고치고 version을 올리세요. 필드 설명은 CLAUDE.md '설정 파일 필드' 참고.",
