@@ -577,6 +577,9 @@
     log('info', '이어보기: ' + fmt(t) + '부터 [' + arg.videoId + ']');
     toast(p, '이어서 재생 (' + fmt(t) + ')', '처음부터', function () { v.currentTime = 0; G.send('resume:save', { videoId: arg.videoId, t: 0, d: Math.floor(v.duration || 0), title: rsTitle(arg.videoId) }); });
   });
+  // 영상을 새로 불러올 때마다(같은 영상을 다시 열어도) 다시 물어봄. 예전에는 한 번 물어본 영상은 페이지가 살아 있는 동안 다시 안 물어봐서,
+  // 보다가 닫고 홈에서 같은 영상을 다시 누르면 처음부터 나왔음 (1.0.1, 사용자 제보). 위치 옮김은 rsAsk/resume 의 조건(5초 안·끝 20초 전)이 그대로 막음
+  document.addEventListener('loadstart', function (e) { if (mainVideoEvent(e)) { RS.asked = ''; RS.applied = ''; } }, cap);
   document.addEventListener('playing', function (e) { var p = mainVideoEvent(e); if (p && contentPlaying(p)) rsAsk(p); }, cap);
   document.addEventListener('timeupdate', function (e) { var p = mainVideoEvent(e); if (p && contentPlaying(p)) rsSave(p, e.target, false); }, cap);
   document.addEventListener('pause', function (e) { var p = mainVideoEvent(e); if (p && contentPlaying(p)) rsSave(p, e.target, true); }, cap);
