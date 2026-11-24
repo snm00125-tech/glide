@@ -1,11 +1,11 @@
 {
-  "versionCode": 20012,
-  "versionName": "1.0.12",
-  "apk": "https://raw.githubusercontent.com/snm00125-tech/glide/main/apk/glide-1.0.12.apk",
-  "sha256": "6ef5ac13e12b5f16d46b551daf2fa7b547bd53c6df907d180dcfd5ae41bfdef0",
-  "size": 3091972,
+  "versionCode": 20013,
+  "versionName": "1.0.13",
+  "apk": "https://raw.githubusercontent.com/snm00125-tech/glide/main/apk/glide-1.0.13.apk",
+  "sha256": "72af21b9bda100e5c1dec8c9c91d6c6cb8fb914a7958fb2e35b05a2eae6231c3",
+  "size": 3097296,
   "notes": [
-    "위젯은 노래만 — 영상을 보고 있어도 위젯에는 마지막에 들은 노래가 보이고, ▶를 누르면 그 노래부터 들어요 (위젯 버튼이 영상을 건드리지 않아요)"
+    "설정 → 앱 → 문제 해결에 '버그 제보' — 무슨 문제인지 적어 보내면 운영자에게 바로 전달돼요. 로그도 함께 보낼 수 있어요 (검색어는 빼고, 보낼 내용은 미리 볼 수 있어요)"
   ],
   "date": "2026-11-24"
 }
