@@ -17,7 +17,7 @@
 (function () {
   'use strict';
 
-  var CORE_VERSION = '1.0.11';
+  var CORE_VERSION = '1.0.12';
   var CORE_API = 2; // filters.json의 minCore와 비교
 
   var W = window;

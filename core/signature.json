@@ -1,10 +1,10 @@
 {
-  "version": "2026.11.23.16",
+  "version": "2026.11.24.1",
   "files": {
-    "glide-core.js": "57f5ef9235d0a0ab72262f1a6e69fc6a7cd86823da1f9b6b61804049b6d3bddc",
+    "glide-core.js": "4e868798a8a609f111754b8655b02daa30d76feb858b7a68f8aa4fcf83ffbb22",
     "glide-plus.js": "35f553777b3a564bab5efc63bbdaf50d5459f3c0aa8fbf97187b78d4b2c73702",
     "glide-android.js": "c44b4f42ea45aa0f9d1451be24c87cb0f7478236604182fb849a642095dff0a7",
-    "filters.json": "fd55d6a558ee77bce9f3de4984c4f3bc4689baddce84608cac30bba77501743e"
+    "filters.json": "1b7f0f8e276c92a88a613d65e7867c6ed5194205c10d54b2e38154fd39b87830"
   },
-  "sig": "MEYCIQCMR5HOAfrxildTow5xXHm6phzxkWW3bCzcOYZ0qI/FRAIhAMI7gpu3gLeX/Q8GV+sAMZpgZV0ioYtQIom/8qJhCARd"
+  "sig": "MEUCIHTESHs2Vz7Tf8wrK+0t+bieftLk/C0BPylKLNnW2ZlfAiEAsZi6ISjboApB6Twt/jfNFFc4h5wOqgAo8PrLOYRtRvM="
 }

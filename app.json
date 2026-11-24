@@ -1,13 +1,11 @@
 {
-  "versionCode": 20011,
-  "versionName": "1.0.11",
-  "apk": "https://raw.githubusercontent.com/snm00125-tech/glide/main/apk/glide-1.0.11.apk",
-  "sha256": "4bfa773a33d5cf9446683c56284c2a41221a87595b04b48ba1e090c4a53b4427",
-  "size": 3091932,
+  "versionCode": 20012,
+  "versionName": "1.0.12",
+  "apk": "https://raw.githubusercontent.com/snm00125-tech/glide/main/apk/glide-1.0.12.apk",
+  "sha256": "6ef5ac13e12b5f16d46b551daf2fa7b547bd53c6df907d180dcfd5ae41bfdef0",
+  "size": 3091972,
   "notes": [
-    "전체화면 가로·세로 버튼이 가끔 안 먹던 것 — 펼친 폴드에서도 동작, 조작부가 사라지는 순간 눌러도 돌아가요",
-    "추천 탭: 조회수 1천 회 미만 영상(무단으로 다시 올린 영상이 많음)은 빼요 · 추천순·최신순·조회수순 정렬",
-    "영상 화면 채널 줄: 구독자 수 옆에 올린 때 (예: 334만 · 1일 전)"
+    "위젯은 노래만 — 영상을 보고 있어도 위젯에는 마지막에 들은 노래가 보이고, ▶를 누르면 그 노래부터 들어요 (위젯 버튼이 영상을 건드리지 않아요)"
   ],
-  "date": "2026-11-23"
+  "date": "2026-11-24"
 }
