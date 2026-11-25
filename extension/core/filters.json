@@ -1,9 +1,9 @@
 {
   "schema": 1,
-  "version": "2026.11.24.4",
-  "minCore": 2,
+  "version": "2026.11.25.3",
+  "minCore": 3,
   "updateUrl": "https://raw.githubusercontent.com/snm00125-tech/glide/main/core/filters.json",
-  "note": "유튜브 구조가 바뀌면 이 파일만 고치고 version을 올리세요. 필드 설명은 CLAUDE.md '설정 파일 필드' 참고.",
+  "note": "topicPacks: 보기 싫은 주제 묶음 (words 는 제목·채널 이름에 들어 있으면 걸림, 앞에 ^ 를 붙이면 낱말 첫머리에서만(검정치마의 정치 X), except 가 들어 있으면 그 묶음은 안 걸림). 유튜브 구조가 바뀌면 이 파일만 고치고 version을 올리세요. 필드 설명은 CLAUDE.md '설정 파일 필드' 참고.",
   "prune": {
     "urlPatterns": [
       "/youtubei/v1/player",
@@ -343,6 +343,512 @@
       ]
     }
   },
+  "topicPacks": [
+    {
+      "id": "politics",
+      "group": "사회·시사",
+      "name": "정치",
+      "desc": "정당·국회·선거·정치인",
+      "words": [
+        "^정치",
+        "^정치인",
+        "국회",
+        "국회의원",
+        "^대통령",
+        "대통령실",
+        "대통령 선거",
+        "대선 후보",
+        "대선후보",
+        "대선 토론",
+        "총선",
+        "지방선거",
+        "^여당",
+        "^야당",
+        "탄핵",
+        "국정감사",
+        "청와대",
+        "더불어민주당",
+        "민주당",
+        "국민의힘",
+        "국힘",
+        "조국혁신당",
+        "개혁신당",
+        "진보당",
+        "정의당",
+        "^좌파",
+        "^우파",
+        "윤석열",
+        "이재명",
+        "한동훈",
+        "김건희",
+        "이준석",
+        "홍준표",
+        "김문수",
+        "정청래",
+        "장동혁"
+      ]
+    },
+    {
+      "id": "news",
+      "group": "사회·시사",
+      "name": "시사·뉴스",
+      "desc": "뉴스 채널·속보·시사 토론",
+      "words": [
+        "뉴스",
+        "속보",
+        "[단독]",
+        "앵커",
+        "시사 토론",
+        "시사토론",
+        "시사평론",
+        "시사 이슈",
+        "news",
+        "ytn"
+      ],
+      "except": [
+        "ytn 사이언스",
+        "ytn science"
+      ]
+    },
+    {
+      "id": "war",
+      "group": "사회·시사",
+      "name": "북한·전쟁",
+      "desc": "북한·미사일·전쟁 소식",
+      "words": [
+        "북한",
+        "김정은",
+        "미사일",
+        "핵실험",
+        "전쟁 발발",
+        "우크라이나 전쟁",
+        "러시아군",
+        "이스라엘군",
+        "하마스",
+        "전투기 격추"
+      ]
+    },
+    {
+      "id": "gender",
+      "group": "사회·시사",
+      "name": "젠더 갈등",
+      "desc": "남녀 갈등·페미 논쟁",
+      "words": [
+        "남혐",
+        "여혐",
+        "젠더 갈등",
+        "남녀 갈등",
+        "김치녀",
+        "이대남",
+        "이대녀",
+        "페미니즘",
+        "페미니스트",
+        "페미 논쟁"
+      ]
+    },
+    {
+      "id": "crime",
+      "group": "사회·시사",
+      "name": "사건·사고",
+      "desc": "범죄·참사·사고 영상",
+      "words": [
+        "살인",
+        "살해",
+        "흉기",
+        "참사",
+        "성범죄",
+        "성폭행",
+        "납치",
+        "시신",
+        "학대",
+        "사망사고",
+        "사망 사고",
+        "사건사고",
+        "사건 사고",
+        "교도소",
+        "사형",
+        "마약 투약",
+        "마약 사범",
+        "필로폰"
+      ]
+    },
+    {
+      "id": "religion",
+      "group": "사회·시사",
+      "name": "종교",
+      "desc": "설교·예배·포교",
+      "words": [
+        "교회",
+        "목사",
+        "설교",
+        "예배",
+        "찬양",
+        "성경",
+        "기독교",
+        "천주교",
+        "성당",
+        "신부님",
+        "불교",
+        "스님",
+        "법문",
+        "법륜",
+        "사찰",
+        "이슬람",
+        "신천지",
+        "이단",
+        "하나님",
+        "하느님"
+      ]
+    },
+    {
+      "id": "coin",
+      "group": "돈·광고",
+      "name": "코인·주식 리딩",
+      "desc": "급등주·코인 추천·리딩방",
+      "words": [
+        "비트코인",
+        "알트코인",
+        "밈코인",
+        "코인 추천",
+        "코인 전망",
+        "코인 시황",
+        "코인 투자",
+        "가상화폐",
+        "암호화폐",
+        "리딩방",
+        "급등주",
+        "급등 종목",
+        "대박 종목",
+        "종목 추천",
+        "상한가",
+        "선물 거래",
+        "레버리지"
+      ]
+    },
+    {
+      "id": "estate",
+      "group": "돈·광고",
+      "name": "부동산·분양",
+      "desc": "집값·청약·분양 광고",
+      "words": [
+        "부동산",
+        "분양",
+        "청약",
+        "갭투자",
+        "집값",
+        "아파트값",
+        "전세 사기",
+        "재건축",
+        "임장"
+      ]
+    },
+    {
+      "id": "sidejob",
+      "group": "돈·광고",
+      "name": "부업·수익 인증",
+      "desc": "월천·자동 수익·부업 광고",
+      "words": [
+        "부업",
+        "월천",
+        "월 천만",
+        "자동 수익",
+        "자동수익",
+        "무자본",
+        "수익 인증",
+        "재택 부업",
+        "스마트스토어 창업",
+        "패시브 인컴",
+        "돈 버는 법"
+      ]
+    },
+    {
+      "id": "gamble",
+      "group": "돈·광고",
+      "name": "도박·토토",
+      "desc": "카지노·슬롯·토토",
+      "words": [
+        "불법 도박",
+        "도박 중독",
+        "도박 사이트",
+        "도박꾼",
+        "카지노",
+        "슬롯머신",
+        "바카라",
+        "스포츠토토",
+        "토토사이트",
+        "홀덤",
+        "파워볼"
+      ]
+    },
+    {
+      "id": "health",
+      "group": "돈·광고",
+      "name": "건강 낚시",
+      "desc": "'의사가 경고'·'이것만 먹으면' 류",
+      "words": [
+        "의사가 경고",
+        "의사들이 경고",
+        "절대 먹지",
+        "절대 드시지",
+        "암 걸리는",
+        "암을 부르는",
+        "이것만 먹으면",
+        "혈관 청소",
+        "당뇨 잡는",
+        "혈당 뚝",
+        "노화 막는"
+      ]
+    },
+    {
+      "id": "beauty",
+      "group": "돈·광고",
+      "name": "성형·시술",
+      "desc": "성형·시술 후기",
+      "words": [
+        "성형",
+        "지방흡입",
+        "쌍꺼풀",
+        "보톡스",
+        "필러",
+        "리프팅",
+        "코수술",
+        "가슴수술",
+        "윤곽술"
+      ]
+    },
+    {
+      "id": "gossip",
+      "group": "연예·취향",
+      "name": "연예 가십·폭로",
+      "desc": "열애·이혼·폭로·사이버 렉카",
+      "words": [
+        "열애",
+        "열애설",
+        "이혼 소송",
+        "이혼설",
+        "불륜",
+        "사생활 폭로",
+        "렉카",
+        "충격 근황",
+        "파경",
+        "결별설"
+      ]
+    },
+    {
+      "id": "idol",
+      "group": "연예·취향",
+      "name": "아이돌·직캠",
+      "desc": "아이돌·직캠·컴백",
+      "words": [
+        "아이돌",
+        "직캠",
+        "팬캠",
+        "컴백",
+        "케이팝",
+        "kpop",
+        "k-pop",
+        "음방",
+        "뮤비 리액션"
+      ]
+    },
+    {
+      "id": "mukbang",
+      "group": "연예·취향",
+      "name": "먹방",
+      "desc": "먹방·대식가",
+      "words": [
+        "먹방",
+        "mukbang",
+        "대식가",
+        "먹방 asmr",
+        "eating show",
+        "폭식"
+      ]
+    },
+    {
+      "id": "asmr",
+      "group": "연예·취향",
+      "name": "ASMR",
+      "desc": "속삭임·소리 영상",
+      "words": [
+        "asmr",
+        "팅글"
+      ]
+    },
+    {
+      "id": "game",
+      "group": "연예·취향",
+      "name": "게임 방송",
+      "desc": "게임 실황·하이라이트",
+      "words": [
+        "게임 실황",
+        "게임 방송",
+        "겜방",
+        "신작 게임",
+        "게임 공략",
+        "게임 리뷰",
+        "배그",
+        "배틀그라운드",
+        "리그오브레전드",
+        "롤 하이라이트",
+        "롤드컵",
+        "마인크래프트",
+        "로블록스",
+        "발로란트",
+        "오버워치",
+        "피파 온라인",
+        "메이플스토리",
+        "e스포츠"
+      ]
+    },
+    {
+      "id": "spoiler",
+      "group": "연예·취향",
+      "name": "결말·줄거리 요약",
+      "desc": "영화·드라마 결말 포함 요약",
+      "words": [
+        "결말 포함",
+        "결말포함",
+        "결말까지",
+        "결말 해석",
+        "영화 결말",
+        "드라마 결말",
+        "줄거리 요약",
+        "스포 주의",
+        "스포주의"
+      ]
+    },
+    {
+      "id": "ai",
+      "group": "연예·취향",
+      "name": "AI 생성 영상",
+      "desc": "AI 커버·AI로 만든 영상",
+      "words": [
+        "ai 커버",
+        "ai cover",
+        "ai 노래",
+        "ai로 만든",
+        "ai 생성",
+        "ai가 만든"
+      ]
+    },
+    {
+      "id": "kids",
+      "group": "생활",
+      "name": "어린이·장난감",
+      "desc": "키즈·장난감·동요",
+      "words": [
+        "키즈",
+        "장난감 놀이",
+        "장난감 리뷰",
+        "^동요",
+        "핑크퐁",
+        "뽀로로",
+        "캐리tv",
+        "어린이 tv",
+        "아기상어",
+        "베베핀"
+      ]
+    },
+    {
+      "id": "parenting",
+      "group": "생활",
+      "name": "육아·임신",
+      "desc": "육아·출산·아기 일상",
+      "words": [
+        "육아",
+        "신생아",
+        "임신",
+        "출산",
+        "아기 일상",
+        "아기 브이로그",
+        "산후",
+        "태교"
+      ]
+    },
+    {
+      "id": "dating",
+      "group": "생활",
+      "name": "연애·이별",
+      "desc": "연애 상담·썸·이별",
+      "words": [
+        "연애",
+        "^썸 타는",
+        "짝사랑",
+        "전남친",
+        "전여친",
+        "환승연애",
+        "소개팅",
+        "재회 방법",
+        "이별 후"
+      ]
+    },
+    {
+      "id": "drink",
+      "group": "생활",
+      "name": "술·음주",
+      "desc": "술 먹방·음주",
+      "words": [
+        "음주",
+        "술먹방",
+        "술 먹방",
+        "혼술",
+        "술자리",
+        "소주",
+        "맥주 먹방",
+        "주량",
+        "만취"
+      ]
+    },
+    {
+      "id": "adult",
+      "group": "자극적인 영상",
+      "name": "19금·선정적",
+      "desc": "성인 콘텐츠·노출·야한 썰",
+      "words": [
+        "19금",
+        "19+",
+        "성인 콘텐츠",
+        "성인콘텐츠",
+        "성인용",
+        "야한 영상",
+        "야한 썰",
+        "야한 이야기",
+        "야썰",
+        "섹드립",
+        "란제리",
+        "그라비아",
+        "후방주의",
+        "후방 주의",
+        "노출 사고",
+        "노출사고",
+        "몸매",
+        "섹시",
+        "^sexy",
+        "비키니",
+        "수영복",
+        "노출 심한"
+      ]
+    },
+    {
+      "id": "horror",
+      "group": "자극적인 영상",
+      "name": "공포·괴담",
+      "desc": "귀신·심령·공포 썰",
+      "words": [
+        "귀신",
+        "심령",
+        "흉가",
+        "괴담",
+        "공포 썰",
+        "공포썰",
+        "무서운 이야기",
+        "무서운 썰",
+        "폐가",
+        "저주"
+      ]
+    }
+  ],
   "android": {
     "note": "안드로이드 앱 전용 (core/glide-android.js). 상단 바 버튼 위치(실제 m.youtube 구조 3가지 확인), 유튜브 전체화면 버튼, PIP·확대·대체 전체화면 CSS, 손동작 수치. 실제 구조(2026-11): #player-container-id > #player > #movie_player 와 그 옆 #player-control-container(유튜브 조작부). polishCss: 유튜브 앱처럼 목록 구분선·간격 (설정 appStyle)",
     "headerAnchors": [
@@ -424,7 +930,8 @@
       ".ytVideoMetadataViewModelContent{padding-left:12px!important;padding-right:12px!important}",
       "yt-video-metadata-carousel-view-model{margin-left:12px!important;margin-right:12px!important}",
       ".ytCarouselTitleViewModelTitle{font-weight:700!important}",
-      ".ytCommentsEntryPointTeaserViewModelTeaser,.ytCommentsEntryPointTeaserViewModelTeaser .ytAttributedStringHost,.ytTextCarouselItemViewModelText{font-size:12px!important;line-height:18px!important}"
+      ".ytCommentsEntryPointTeaserViewModelTeaser,.ytCommentsEntryPointTeaserViewModelTeaser .ytAttributedStringHost,.ytTextCarouselItemViewModelText{font-size:12px!important;line-height:18px!important}",
+      "/* 한글 낱말 단위 줄바꿈: 댓글·답글·설명 창 (유튜브 앱처럼. 수/육, 느/낄처럼 낱말 중간에서 꺾였음 — 폴드2 실기 2026-11-25) */ ytm-comment-renderer .YtmCommentRendererContent,ytm-comment-renderer .comment-text,.YtmCommentRendererText,ytm-engagement-panel .user-text,ytm-expandable-video-description-body-renderer,ytm-engagement-panel yt-attributed-string,ytm-engagement-panel .yt-core-attributed-string{word-break:keep-all!important;overflow-wrap:anywhere!important}"
     ],
     "unmuteButtons": [
       "#movie_player button.ytp-unmute"

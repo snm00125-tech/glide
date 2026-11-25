@@ -17,8 +17,8 @@
 (function () {
   'use strict';
 
-  var CORE_VERSION = '1.0.0';
-  var CORE_API = 2; // filters.json의 minCore와 비교
+  var CORE_VERSION = '1.0.1';
+  var CORE_API = 3; // filters.json의 minCore와 비교
 
   var W = window;
   var MARK = Symbol.for('glide.core');
@@ -105,6 +105,7 @@
       pageScripts: { hosts: arr(ps.hosts), removeInlineContaining: arr(ps.removeInlineContaining), blockPromiseHandlers: arr(ps.blockPromiseHandlers) },
       diag: { slowStartMs: dg.slowStartMs || 2500, stallMs: dg.stallMs || 4000 },
       plus: f.plus && typeof f.plus === 'object' ? f.plus : {},
+      topicPacks: arr(f.topicPacks), // 보기 싫은 주제 묶음 (1.0.1, glide-plus 차단 · 추천 탭)
       android: f.android && typeof f.android === 'object' ? f.android : {}
     };
   }

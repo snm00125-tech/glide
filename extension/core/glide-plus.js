@@ -26,7 +26,7 @@
     sponsorBlock: true, sbCategories: ['sponsor', 'selfpromo', 'interaction', 'intro'],
     channelSpeed: true, defaultRate: 1, channelRates: {},
     hideShorts: true, shortsAsVideo: true,
-    blockChannels: [], blockKeywords: [],
+    blockChannels: [], blockKeywords: [], hideTopics: [],
     peakButton: true, resume: true
   };
   var S = G.settings();
@@ -127,6 +127,27 @@
       k = String(k || '').trim().toLowerCase();
       if (k) { BL.keywords.push(k); BL.any = true; }
     });
+    // 보기 싫은 주제 묶음 (1.0.1, 설정 hideTopics = filters.json topicPacks 의 id). 홈·영상 아래 추천에서만 — 직접 검색한 결과는 그대로
+    BL.topics = topicWords(opt('hideTopics'));
+    if (BL.topics.length) BL.any = true;
+  }
+  // [{w: 낱말, name: 묶음 이름}]
+  function topicWords(ids) {
+    var on = {}, out = [];
+    (ids || []).forEach(function (id) { on[id] = 1; });
+    (G.filters().topicPacks || []).forEach(function (p) {
+      if (!p || !on[p.id]) return;
+      var ex = (p.except || []).map(function (x) { return String(x || '').toLowerCase(); });
+      (p.words || []).forEach(function (w) { w = String(w || '').trim().toLowerCase(); var lb = w[0] === '^'; if (lb) w = w.slice(1); if (w) out.push({ w: w, lb: lb, ex: ex, name: p.name }); });
+    });
+    return out;
+  }
+  // 낱말이 들어 있는지: lb = 낱말 첫머리에서만 (앞 글자가 한글·영문·숫자면 아님) · ex = 이 말이 있으면 그 묶음은 안 걸림
+  function topicHit(t, x) {
+    for (var i = 0; i < x.ex.length; i++) if (x.ex[i] && t.indexOf(x.ex[i]) !== -1) return false;
+    var at = t.indexOf(x.w);
+    while (at !== -1) { if (!x.lb || at === 0 || !/[가-힣a-z0-9]/.test(t[at - 1])) return true; at = t.indexOf(x.w, at + 1); }
+    return false;
   }
   compileBlock();
 
@@ -160,7 +181,7 @@
     }
     return out;
   }
-  function blockedReason(body) {
+  function blockedReason(body, search) {
     var vid = body && (body.videoId || body.contentId);
     if (vid && BL.vids[vid]) return '관심 없음';
     var c = collect(body), i;
@@ -170,14 +191,17 @@
       var t = c.texts[i].trim().toLowerCase();
       if (BL.names[t]) return '채널 ' + c.texts[i].trim();
       for (var j = 0; j < BL.keywords.length; j++) if (t.indexOf(BL.keywords[j]) !== -1) return '키워드 "' + BL.keywords[j] + '"';
+      if (!search) for (var k = 0; k < BL.topics.length; k++) if (topicHit(t, BL.topics[k])) return '주제 ' + BL.topics[k].name;
     }
     return null;
   }
+  // 직접 검색한 결과인지 (보기 싫은 주제는 검색에서는 빼지 않음): 검색 요청이거나 검색 화면의 첫 데이터
+  function isSearchSrc(src) { return /\/search\b/.test(String(src || '')) || (/^yt|initial/i.test(String(src || '')) && location.pathname === '/results'); }
   G.addTransformer({
     name: 'block',
     active: function () { return S.enabled && BL.any; },
     run: function (root, src) {
-      var removed = 0, reasons = {}, stack = [root], visited = 0;
+      var removed = 0, reasons = {}, stack = [root], visited = 0, search = isSearchSrc(src);
       while (stack.length) {
         var o = stack.pop();
         if (++visited > 300000) break;
@@ -187,7 +211,7 @@
             if (!it || typeof it !== 'object') continue;
             var body = itemBody(it);
             if (body) {
-              var why = blockedReason(body);
+              var why = blockedReason(body, search);
               if (why) { o.splice(i, 1); removed++; reasons[why] = (reasons[why] || 0) + 1; continue; }
             }
             stack.push(it);
