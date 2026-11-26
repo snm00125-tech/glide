@@ -1,12 +1,11 @@
 {
-  "versionCode": 30003,
-  "versionName": "1.0.3",
-  "apk": "https://raw.githubusercontent.com/snm00125-tech/glide/main/apk/glide-1.0.3.apk",
-  "sha256": "5b9b2020a6f286442cd973dfb17060574de6cc118c682f40b683c62bf19c97d0",
-  "size": 4730220,
+  "versionCode": 30004,
+  "versionName": "1.0.4",
+  "apk": "https://raw.githubusercontent.com/snm00125-tech/glide/main/apk/glide-1.0.4.apk",
+  "sha256": "667240d1ee9f4d312b749ebfb4526ecc8a41a6710b4159b141c4a7b19c057025",
+  "size": 4730984,
   "notes": [
-    "위젯의 ▶만 눌렀는데 앱이 열리던 문제를 고쳤어요 — 앱이 뒤에 켜져 있으면 열지 않고 바로 마지막 곡부터 들려줘요",
-    "노래를 멈춰 둬도 이어폰 버튼이 다른 앱이 아니라 Glide로 와요 (재생 알림을 닫기 전까지)"
+    "폴드를 펼친 화면에서 전체화면 가로·세로 버튼이 안 먹던 문제를 고쳤어요"
   ],
   "date": "2026-11-26"
 }
