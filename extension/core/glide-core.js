@@ -17,7 +17,7 @@
 (function () {
   'use strict';
 
-  var CORE_VERSION = '1.0.5';
+  var CORE_VERSION = '1.0.6';
   var CORE_API = 3; // filters.json의 minCore와 비교
 
   var W = window;
@@ -1578,8 +1578,16 @@
     var mv = document.documentElement && document.documentElement.getAttribute('data-glide-mv'); if (v && mv && mv === v) return false;
     if (/[?&]glide_music=1/.test(location.search)) return true;
     if (!v) return false;
-    try { var s = JSON.parse(localStorage.getItem('glide:gm') || 'null'); return !!(s && s.items && Date.now() - (s.at || 0) < 864e5 && s.items.some(function (x) { return x && x.id === v; })); } catch (e) { return false; }
+    // (2026-11-26 폰 프로파일: 영상을 열 때 플레이어가 코덱 확인 등으로 이 함수를 수십 번 불러, 매번 100곡짜리 세션을 읽고 풀었음) 0.4초 안에는 지난 결과의 곡 목록을 다시 씀.
+    // 음악 탭에서 고른 곡·다음 곡 이동은 주소에 glide_music=1 이 붙어 위에서 먼저 판단되므로 늦게 바뀌어도 결과가 같음
+    var now = Date.now();
+    if (!MNC.ids || now - MNC.at > 400) {
+      MNC.at = now; MNC.ids = {};
+      try { var s = JSON.parse(localStorage.getItem('glide:gm') || 'null'); if (s && s.items && now - (s.at || 0) < 864e5) s.items.forEach(function (x) { if (x && x.id) MNC.ids[x.id] = 1; }); } catch (e) { /* ignore */ }
+    }
+    return !!MNC.ids[v];
   }
+  var MNC = { at: 0, ids: null };
   function inProgress(vid) { return playVid === vid && Date.now() - playAt > 2500; }
   // 본 플레이어의 'playing'마다:
   //  - 앱이 보이는 동안 재생을 시작한 영상(광고 중 포함)은 듣기 모드가 손대지 않음 (qualityVid).

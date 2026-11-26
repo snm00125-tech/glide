@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "2026.11.26.4",
+  "version": "2026.11.26.5",
   "minCore": 3,
   "updateUrl": "https://raw.githubusercontent.com/snm00125-tech/glide/main/core/filters.json",
   "note": "topicPacks: 보기 싫은 주제 묶음 (words 는 제목·채널 이름에 들어 있으면 걸림, 앞에 ^ 를 붙이면 낱말 첫머리에서만(검정치마의 정치 X), except 가 들어 있으면 그 묶음은 안 걸림). 유튜브 구조가 바뀌면 이 파일만 고치고 version을 올리세요. 필드 설명은 CLAUDE.md '설정 파일 필드' 참고.",

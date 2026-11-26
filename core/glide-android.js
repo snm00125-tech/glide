@@ -81,6 +81,7 @@
       '#glide-bright-bar[hidden]{display:none}#glide-bright-bar>i{position:absolute;left:0;right:0;bottom:0;background:rgba(255,255,255,.9);pointer-events:none}' +
       '#glide-bright-bar>b{position:absolute;left:0;right:0;bottom:8px;height:20px;background:url("' + SUN_ICON + '") center/18px 18px no-repeat;filter:invert(.6);pointer-events:none}\n';
     css += '[data-glide-fb]{display:none!important}\n';
+    css += '.ytVideoSubtitleViewModelSubstring[data-glide-dup]{display:none!important}\n';
     css += 'html.glide-pip #glide-bright-btn,html.glide-pip #glide-bright-bar{display:none!important}\n';
     // 전체화면 가로·세로 바꾸기 버튼 (오른쪽 가운데, 화면 가장자리 여백만큼 안쪽)
     css += '#glide-rot-btn{all:unset;position:fixed;right:calc(16px + env(safe-area-inset-right,0px));top:50%;width:44px;height:44px;margin-top:-22px;border-radius:22px;z-index:2147483647;pointer-events:auto;cursor:pointer;' +
@@ -103,10 +104,17 @@
     css += 'ytm-slim-video-action-bar-renderer .slim-video-action-bar-actions.simplified>:not(like-button-view-model):not(a):not(div):not(script){margin-right:8px!important}\n';
     // 좁은 화면에서는 유튜브가 싫어요를 빼고 좋아요만 둠 → 싫어요와 붙이려던 -7px 때문에 옆 버튼(장면 저장 등)과 겹쳤음 (2026-11-23 실제 사이트) → 옆에 싫어요가 없으면 띄움
     css += 'ytm-slim-video-action-bar-renderer .slim-video-action-bar-actions.simplified>like-button-view-model:not(:has(+dislike-button-view-model)){margin-right:8px!important}\n';
+    // 좋아요·싫어요 사이 (2026-11-26, 사용자 캡처·412px 실제 사이트): 유튜브가 좋아요에 margin-right:-7px 을 줘 두 반투명 알약이 7px 겹쳐 굵고 밝은 띠로 보였음.
+    // 유튜브 앱은 한 알약 안의 가는 세로줄 → 겹침만 없앰 (유튜브 자체의 가는 구분선이 그대로 보임)
+    css += 'ytm-slim-video-action-bar-renderer .slim-video-action-bar-actions>like-button-view-model:has(+dislike-button-view-model){margin-right:0!important}' +
+      'ytm-slim-video-action-bar-renderer .slim-video-action-bar-actions>like-button-view-model+dislike-button-view-model{margin-left:0!important}\n';
     css += 'html.glide-owner ytm-slim-video-action-bar-renderer{position:relative!important;margin-top:50px!important}' +
       'html.glide-owner ytm-slim-video-action-bar-renderer a.slim-video-owner-icon{display:block!important;position:absolute!important;left:12px!important;top:-40px!important;width:32px!important;height:32px!important;min-width:0!important;margin:0!important;padding:0!important;z-index:1!important}' +
       'html.glide-owner ytm-slim-video-action-bar-renderer a.slim-video-owner-icon *{width:32px!important;height:32px!important}#glide-owner .gw-ch img{visibility:hidden}' +
       'html.glide-owner ytm-slim-video-action-bar-renderer .slim-subscribe-button{display:none!important}' +
+      // 유튜브는 구독 버튼 바로 다음 버튼에 margin-left:auto(버튼들을 오른쪽으로 밂). 구독 버튼을 채널 줄로 옮겼으니 이것도 없앰 → 유튜브 앱처럼 왼쪽부터
+      // (2026-11-26: 버튼이 적어 줄에 남는 자리가 있으면 좋아요가 47px 들여 있었음, 412px 실제 사이트)
+      'html.glide-owner .slim-video-action-bar-actions .slim-subscribe-button + .slim_video_action_bar_renderer_button{margin-left:0!important}' +
       'html:not(.glide-owner) #glide-owner{display:none!important}' +
       '#glide-owner{position:absolute;left:0;right:0;top:-50px;height:50px;box-sizing:border-box;display:flex;align-items:center;gap:12px;padding:6px 12px 4px 12px}' +
       '#glide-owner .gw-ch{display:flex;align-items:center;gap:12px;min-width:0;flex:1;text-decoration:none;color:inherit}' +
@@ -1773,6 +1781,7 @@
     }
     labelActions(bar);
     ensureOwnerRow(bar);
+    subDedupe();
     if (QU) quRow();
   }
   // 지금 영상의 채널 {channelId, author}: 코어가 받아 둔 영상 정보, 없으면 플레이어 영상 정보(getPlayerResponse) — 실기: 앱 안에서 옮겨 간 영상은 코어 정보가 없었음
@@ -1903,6 +1912,20 @@
     for (var i = 0; i < bs.length; i++) {
       var t = names[bs[i].getAttribute('aria-label')];
       if (t && bs[i].getAttribute('data-glide-label') !== t) bs[i].setAttribute('data-glide-label', t);
+    }
+  }
+  // 제목 아래 정보 줄 (2026-11-26 폰에서 유튜브 앱과 비교): 모바일 웹은 '@채널아이디 · 좋아요 N개 · 조회수 · 날짜'라 좁은 화면에서 날짜가 '더보기'에 잘렸음.
+  // 유튜브 앱은 '조회수 · 날짜 · #태그'만. → 채널 줄(이름)·좋아요 버튼과 겹치는 @아이디·좋아요 수를 숨기고, 날짜는 채널 줄에 이미 보일 때(사용자 요청 2026-11-23)만 숨김
+  function subDedupe() {
+    // 채널 줄 날짜가 좁은 화면에서 '…'로 잘리면(폴드 바깥 화면 320px, 알림 종 + 구독 버튼) 날짜가 어디에도 안 보이므로 그때는 정보 줄 날짜를 남김
+    var row = document.getElementById('glide-owner'), cnt = row && row.querySelector('.gw-ch span');
+    var ownTxt = cnt && cnt.scrollWidth <= cnt.clientWidth + 1 ? cnt.textContent || '' : '';
+    var ss = document.querySelectorAll('.ytVideoSubtitleViewModelSubtitleContent > .ytVideoSubtitleViewModelSubstring');
+    for (var i = 0; i < ss.length; i++) {
+      var t = (ss[i].textContent || '').trim(), dup = false;
+      if (/^@\S+$/.test(t) || /^좋아요\s/.test(t) || /^[\d.,]+[KMB]?\s+likes?$/i.test(t)) dup = true;
+      else if (/^(방금|오늘|\d+\s*(초|분|시간|일|주|개월|년)\s*전)$/.test(t) && ownTxt.indexOf(t) >= 0) dup = true;
+      if (dup !== ss[i].hasAttribute('data-glide-dup')) { if (dup) ss[i].setAttribute('data-glide-dup', ''); else ss[i].removeAttribute('data-glide-dup'); }
     }
   }
   // 좋아요 수: 영상 정보 줄의 '좋아요 2.6천개'를 그대로, 없으면 버튼 설명의 숫자를 유튜브 앱처럼 줄여서
@@ -2036,6 +2059,15 @@
     return out;
   }
   function anySheet() { return openSheets().length > 0; }
+  // (2026-11-26 폰 프로파일: 홈을 스크롤하는 동안 0.08초마다 geom 알림이 openSheets 를 두 번 불러, 목록 항목마다 있는 ⋮ 껍데기의 위치를 재느라
+  // 배치 계산을 강제했음 → 스크롤 잔렉) 스크롤 중에는 창이 새로 열리지 않으므로 0.6초 안의 결과를 다시 씀. 멈춰 있으면 늘 새로
+  var SHC = { t: 0, v: null, scrollAt: 0 };
+  function openSheetsLite() {
+    var now = Date.now();
+    if (now - SHC.scrollAt < 250 && SHC.v && now - SHC.t < 600) return SHC.v;
+    SHC.v = openSheets(); SHC.t = now;
+    return SHC.v;
+  }
   // 앱의 뒤로 가기: 열린 창(댓글·설명·메뉴·검색)부터 닫음 (유튜브 앱과 같음)
   // ===========================================================================
   // 창을 아래로 휙 밀면 닫힘 (2026-11-21, 사용자: "모든 팝업창에서 아래로 확 슬라이드하면 내려가야 하는데 안 내려가는 경우가 많음").
@@ -2212,6 +2244,7 @@
     G.send("pullable", { on: p });
   }
   W.addEventListener("scroll", function () {
+    SHC.scrollAt = Date.now();
     if (pullTick) return;
     pullTick = true;
     G.setTimeout.call(W, function () { pullTick = false; reportPull(); reportGeom(); }, 80);
@@ -2237,30 +2270,64 @@
   document.addEventListener('animationstart', function (e) { if (e.animationName === ANIM) [50, 1000, 3000].forEach(function (ms) { G.setTimeout.call(W, reportTheme, ms); }); }, true);
   try { W.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () { G.setTimeout.call(W, reportTheme, 300); }); } catch (e) { /* ignore */ }
   W.addEventListener('yt-navigate-finish', function () { [100, 700].forEach(function (ms) { G.setTimeout.call(W, reportTheme, ms); }); }, true);
-  // 불러온 뒤 테마 바꾸기 (2026-11-26 사용자: 영상 보는 중 다크 모드로 바꿔도 흰 화면 그대로). 유튜브 색은 이름이 섞인 변수 약 165개이고
-  // 값은 테마마다 다른 스타일 파일(link#c3-css, 주소의 am= 가 다름)에 있음(실제 사이트 확인). 앱이 PREF 쿠키를 먼저 고친 뒤 이 명령을 보내면
-  // 첫 화면 HTML 에서 새 테마의 파일 주소를 읽어 바꿔 낌 → 새로 불러오지 않아 영상이 멈추지 않음. 안 되면 앱이 예전처럼 새로 불러옴
+  // 불러온 뒤 테마 바꾸기 (2026-11-26 사용자: 영상 보는 중 다크 모드로 바꿔도 흰 화면 그대로). 유튜브 색은 이름이 섞인 변수(약 165개)이고
+  // 값은 테마마다 다른 스타일 파일(link#c3-css, 주소의 am= 가 다름)의 :root 규칙에 있음(실제 사이트 확인).
+  // 스타일 파일 통째로 바꾸면 안 됨: 화면을 옮겨 다니며 붙은 부분(영상 화면 댓글 칸 등)이 빠져 화면이 깨졌음(폰, 로그인). 그래서
+  // 앱이 PREF 쿠키를 먼저 고친 뒤 이 명령을 보내면, 첫 화면·지금 화면 HTML 에서 새 테마 파일 주소를 읽어 그 파일의 :root 규칙(변수 값)만
+  // 'html' 을 붙여 한 단계 높게 덮어씀(:root:root 규칙도 있음). 새로 불러오지 않아 영상·보던 자리 그대로. 결과는 테마·버전별로 보관해 다음엔 바로
   var TLV = { gen: 0 };
+  function tlvParts(cssTexts) {
+    var parts = [], seen = {};
+    var take = function (rules, wrap) {
+      for (var i = 0; i < rules.length; i++) {
+        var r = rules[i], sel = r.selectorText ? r.selectorText.replace(/\s+/g, '') : '';
+        if (sel && /^(:root)+$/.test(sel)) { var t = 'html' + sel + '{' + r.style.cssText + '}'; t = wrap ? wrap(t) : t; if (!seen[t]) { seen[t] = 1; parts.push(t); } }
+        else if (r.media && r.cssRules) { (function (mt) { take(r.cssRules, function (t) { return '@media ' + mt + '{' + t + '}'; }); })(r.media.mediaText); }
+      }
+    };
+    cssTexts.forEach(function (c) { try { var sh = new CSSStyleSheet(); sh.replaceSync(c); take(sh.cssRules); } catch (e) { /* ignore */ } });
+    return parts.join('\n');
+  }
   G.onCommand('themeLive', function (arg) {
     var want = !!(arg && arg.dark), gen = ++TLV.gen;
-    var done = function (how) { if (gen !== TLV.gen) return; lastTheme = null; [60, 400, 1200].forEach(function (ms) { G.setTimeout.call(W, function () { reportTheme(); try { recTheme(); } catch (e) { /* ignore */ } }, ms); }); log('info', '테마 바로 바꿈 (' + (want ? '어둡게' : '밝게') + ', ' + how + ')'); };
-    fetch('/', { credentials: 'include', cache: 'no-store' }).then(function (r) { return r.text(); }).then(function (html) {
-      if (gen !== TLV.gen) return;
-      var m = /<link id="c3-css" href="([^"]+)"/.exec(html);
-      if (!m) { log('warn', '테마 바꾸기: 스타일 파일 주소를 못 찾음'); return; }
-      var href = m[1].replace(/&amp;/g, '&'), old = document.getElementById('c3-css');
-      if (old && old.href === href) { done('이미 같음'); return; }
-      var l = document.createElement('link'); l.rel = 'stylesheet'; l.href = href;
-      l.onload = function () {
-        if (old && old.parentNode) old.parentNode.removeChild(old);
-        l.id = 'c3-css';
-        // 믹스·재생목록 막대는 유튜브 스크립트가 만들 때의 테마 색을 style 에 박아 둠 → 지워서 스타일 파일 색을 따르게
-        document.querySelectorAll('ytm-playlist-panel-entry-point[style*="background"]').forEach(function (e) { e.style.removeProperty('background-color'); });
-        done('스타일 파일 교체');
-      };
-      l.onerror = function () { if (l.parentNode) l.parentNode.removeChild(l); log('warn', '테마 바꾸기: 스타일 파일을 못 받음'); };
-      if (old && old.parentNode) old.parentNode.insertBefore(l, old.nextSibling); else (document.head || document.documentElement).appendChild(l);
-    }).catch(function () { log('warn', '테마 바꾸기: 첫 화면을 못 받음'); });
+    var cur = document.getElementById('c3-css'), ver = cur ? (/\/k=([^/]+)/.exec(cur.href) || [])[1] : '';
+    var key = 'glide:themeVars:' + (want ? 'd' : 'l') + ':' + ver + ':' + (location.pathname === '/watch' ? 'w' : 'b');
+    var apply = function (txt, how) {
+      if (gen !== TLV.gen || !txt) return false;
+      var st = document.getElementById('glide-theme-live');
+      if (!st) { st = document.createElement('style'); st.id = 'glide-theme-live'; (document.head || document.documentElement).appendChild(st); }
+      st.textContent = txt;
+      // 믹스·재생목록 막대는 유튜브 스크립트가 만들 때의 테마 색을 style 에 박아 둠 → 지워서 변수 색을 따르게
+      document.querySelectorAll('ytm-playlist-panel-entry-point[style*="background"]').forEach(function (e) { e.style.removeProperty('background-color'); });
+      lastTheme = null;
+      [30, 300, 1000].forEach(function (ms) { G.setTimeout.call(W, function () { reportTheme(); try { recTheme(); } catch (e) { /* ignore */ } }, ms); });
+      log('info', '테마 바로 바꿈 (' + (want ? '어둡게' : '밝게') + ', ' + how + ')');
+      // 채널·내 페이지 머리 칸은 유튜브가 프로필 색에서 만든 그 테마의 색을 style 에 직접 넣음(폰: 다크로 바꿔도 머리 칸만 밝게 남아 이름이 안 보였음)
+      // → 둘러보기 화면에 그런 칸이 있으면 그 화면만 새로 불러옴. 음악·추천 탭이 열려 있으면 닫을 때까지 기다림. 영상 화면은 해당 없음
+      if (role() === 'browse' && document.querySelector('.ytLightContainerShapeCone, yt-page-header-view-model [style*="color"]')) {
+        var waitClose = function () {
+          if (gen !== TLV.gen) return;
+          if ((GM && GM.open) || (REC && REC.open)) { G.setTimeout.call(W, waitClose, 700); return; }
+          log('info', '테마: 머리 칸 색이 박힌 화면이라 새로 불러옴'); location.reload();
+        };
+        G.setTimeout.call(W, waitClose, 200);
+      }
+      return true;
+    };
+    var saved = null; try { saved = localStorage.getItem(key); } catch (e) { /* ignore */ }
+    if (saved && apply(saved, '보관본')) return;
+    var hrefOf = function (u) { return fetch(u, { credentials: 'include', cache: 'no-store' }).then(function (r) { return r.text(); }).then(function (h) { var m = /<link id="c3-css" href="([^"]+)"/.exec(h); return m ? m[1].replace(/&amp;/g, '&') : null; }, function () { return null; }); };
+    var pages = ['/']; if (location.pathname !== '/') pages.push(location.pathname + location.search);
+    Promise.all(pages.map(hrefOf)).then(function (hs) {
+      var u = hs.filter(function (h, i) { return h && hs.indexOf(h) === i; });
+      if (!u.length) throw new Error('스타일 파일 주소를 못 찾음');
+      return Promise.all(u.map(function (h) { return fetch(h).then(function (r) { return r.text(); }); }));
+    }).then(function (texts) {
+      var txt = tlvParts(texts);
+      if (!txt) throw new Error('색 값을 못 찾음');
+      try { localStorage.setItem(key, txt); } catch (e) { /* ignore */ }
+      apply(txt, '스타일 파일에서');
+    }).catch(function (e) { log('warn', '테마 바로 바꾸기 실패: ' + (e && e.message)); });
   });
 
   // ===========================================================================
@@ -2524,9 +2591,14 @@
   }, true);
   function hiSection(link) {
     // 기록 링크에서 위로: 영상 링크를 품은 가장 가까운 칸 (내 페이지의 '기록' 가로 줄)
+    // (2026-11-26 폰: 새 내 페이지는 제목 링크가 줄 칸에서 9단계 아래라 8단계까지만 보던 예전 방식이 못 찾았음) 가로 줄 칸을 먼저, 아니면 12단계까지.
+    // 다른 줄 제목까지 품은 큰 칸(내 페이지 전체)은 고르지 않음
+    var shelf = link.closest && link.closest('horizontal-shelf-view-model, ytm-shelf-renderer, ytm-horizontal-card-list-renderer');
+    if (shelf && shelf.querySelector('a[href*="watch?v="], a[href*="/shorts/"]')) return shelf;
     var el = link;
-    for (var i = 0; i < 8 && el && el.parentElement && el.parentElement !== document.body; i++) {
+    for (var i = 0; i < 12 && el && el.parentElement && el.parentElement !== document.body; i++) {
       el = el.parentElement;
+      if (el.querySelectorAll('h2, yt-section-header-view-model').length > 1) return null;
       if (el.querySelector('a[href*="watch?v="], a[href*="/shorts/"]')) return el;
     }
     return null;
@@ -2684,7 +2756,8 @@
     if (a && MP && MP.on && MP.el && !MP.el.hidden && MP.img && MP.img.getBoundingClientRect().width > 40) a = MP.img;
     var r = a ? a.getBoundingClientRect() : null;
     var rect = r && r.width > 0 && r.height > 0 ? [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)] : null;
-    var sheet = anySheet() || !!(MP && MP.el && !MP.el.hidden) || !!(BR && BR.open);
+    var shs = openSheetsLite();
+    var sheet = shs.length > 0 || !!(MP && MP.el && !MP.el.hidden) || !!(BR && BR.open);
     var top = ((W.scrollY || (document.scrollingElement && document.scrollingElement.scrollTop) || 0) <= 0);
     // 라이브 채팅 칸: 앱은 이 안에서 아래로 끌어도 영상을 작게 만들지 않음 (지난 채팅을 보려는 손동작). CHAT은 아래에서 선언(첫 호출 때는 아직 없음)
     var chat = null;
@@ -2693,7 +2766,7 @@
       if (fr.width > 0 && fr.height > 0) chat = [Math.round(fr.left), Math.round(fr.top), Math.round(fr.width), Math.round(fr.height)];
     }
     // 음악 탭의 아래 창(곡 메뉴·담기 등)이 떠 있음: 앱이 작은 플레이어를 잠깐 숨김 (창 아래쪽을 가리지 않게)
-    var pop = role() === 'browse' && (!!(GM && GM.menu) || !!document.getElementById('glide-rec-menu') || !!(REC && REC.editor) || openSheets().some(function (x) { return !(x.matches && x.matches('.mobile-topbar-header, ytm-search, #glide-rec, #glide-music')); }));
+    var pop = role() === 'browse' && (!!(GM && GM.menu) || !!document.getElementById('glide-rec-menu') || !!(REC && REC.editor) || shs.some(function (x) { return !(x.matches && x.matches('.mobile-topbar-header, ytm-search, #glide-rec, #glide-music')); }));
     // 추천 설정 창·유튜브 ⋮ 메뉴 같은 둘러보기 창도: 작은 플레이어가 창 위에 겹쳐 메뉴 항목을 가렸음 (폴드2 실기 2026-11-25. 유튜브 앱은 창이 맨 위). 검색 중 상단 바는 창이 아님
     var np = role() === 'browse' && !!(GM && GM.open && NP && NP.shown && npActive());
     var gmo = role() === 'browse' && !!(GM && GM.open);
@@ -5308,6 +5381,8 @@
       '.gm-acts .p{flex:1 1 auto;justify-content:center}.gm-acts .p i{width:15px;height:15px}.gm-acts .ic{width:40px!important;flex:none;border-radius:10px!important}' +
       '.gm-head{padding:18px 16px 4px!important}.gm-head + .gm-acts{margin-top:10px}' +
       '.gm-row{padding:7px 8px 7px 12px!important;min-height:66px;box-sizing:border-box}' +
+      // (2026-11-26 폰 측정: 차트 탭을 누를 때 100곡 줄을 한꺼번에 배치·그려 1~2장 밀림) 화면 밖 줄은 배치·그리기를 건너뜀. 높이는 한 번 그려진 값을 기억
+      '.gm-row{content-visibility:auto;contain-intrinsic-size:auto 66px}' +
       // 장르·무드 칸: 대표곡 고화질 표지 + 아래쪽 어둡게 + 이름 (멜론 무드 타일처럼). 표지를 받기 전엔 색 칸
       '.gm-grid{gap:10px!important;padding:10px 16px 4px!important}.gm-grid button{height:auto!important;aspect-ratio:16/10!important;min-height:84px;padding:0!important;align-items:flex-end!important;background:var(--gc)!important;border-radius:12px!important;overflow:hidden}' +
       '.gm-grid button::before{display:none}.gm-grid button img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .25s}.gm-grid button img.ok{opacity:1}' +
