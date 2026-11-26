@@ -2518,7 +2518,9 @@
     }
     document.documentElement.classList.remove('glide-hist-away');
     if (!/^\/feed\/(you|library)/.test(p)) return;
-    var links = document.querySelectorAll('a[href^="/feed/history"]');
+    var links = [].slice.call(document.querySelectorAll('a[href^="/feed/history"]'));
+    // 새 내 페이지(2026-11-26 사용자 제보: 기록 줄이 다시 보임)는 '모두 보기'가 링크가 아니라 버튼이라 링크로 못 찾음 → 줄 제목 '기록'/'History' 글자로도 찾음
+    [].forEach.call(document.querySelectorAll('h2, h3, [role=heading], .yt-core-attributed-string, ytm-shelf-header-layout span, yt-section-header-view-model span'), function (h) { if (h.closest('[data-glide]')) return; if (h.children.length === 0 && /^(기록|시청 기록|History|Watch history)$/.test((h.textContent || '').trim())) links.push(h); });
     for (var i = 0; i < links.length; i++) {
       var sec = hiSection(links[i]);
       if (!sec || sec.getAttribute('data-glide-fb')) continue;
@@ -4315,11 +4317,20 @@
   //    영상 대신 음악 재생 화면(#glide-mp: 앨범 이미지·제목·가수·진행 막대·셔플·이전·재생·다음·반복·다음 곡)
   //  - 음악 세션(어떤 곡들을 음악으로 듣는 중인지)은 두 웹뷰가 같이 보는 localStorage 'glide:gm'
   // ===========================================================================
-  var GM = { el: null, body: null, top: null, open: false, view: 'chart', chart: 'kr', cache: {}, loading: false, q: '', genre: '', path: '' };
+  var GM = { el: null, body: null, top: null, open: false, view: 'chart', chart: 'melon', cache: {}, loading: false, q: '', genre: '', path: '' };
+  // 멜론 TOP100 (2026-11-26 사용자: 멜론 차트로): 멜론 일간 차트를 매일 옮겨 두는 유튜브 재생목록 'Melon Daily Top 100 / 멜론 일간차트'(음원 위주).
+  // 못 받으면 같은 채널의 주간 차트 → 유튜브 공식 한국 차트 순서로. 유튜브 공식 차트(국내·해외)는 그대로 남김
   var GM_CHARTS = [
-    { id: 'kr', name: '국내 TOP100', list: 'PL4fGSI1pDJn6jXS_Tv_N9B8Z0HTRVJE0m' },
-    { id: 'global', name: '해외 TOP100', list: 'PL4fGSI1pDJn6puJdseH2Rt9sMvt9E2M4i' }
+    { id: 'melon', name: '멜론 TOP100', list: 'PLnlxKMP5GzKCXJ3Cw99qSWgC01cuhTFxG', alt: ['PLnlxKMP5GzKCLJGF7P0tUl_44CV7-vdUC', 'PL4fGSI1pDJn6jXS_Tv_N9B8Z0HTRVJE0m'], cap: '멜론 일간 차트 · 매일 갱신' },
+    { id: 'kr', name: '유튜브 TOP100', list: 'PL4fGSI1pDJn6jXS_Tv_N9B8Z0HTRVJE0m', cap: '유튜브 공식 차트 · 이번 주 가장 많이 들은 노래' },
+    { id: 'global', name: '해외 TOP100', list: 'PL4fGSI1pDJn6puJdseH2Rt9sMvt9E2M4i', cap: '유튜브 공식 차트 · 이번 주 가장 많이 들은 노래' }
   ];
+  // 차트 재생목록 받기: 50곡 미만이면(지워짐·비공개) 다음 후보로
+  function gmChartList(ch) {
+    var ids = [ch.list].concat(ch.alt || []), i = 0;
+    var next = function () { var id = ids[i++]; if (!id) return Promise.resolve([]); return gmPlaylist(id, 100).then(function (l) { return l && l.length >= 50 ? l : next(); }, next); };
+    return next();
+  }
   var GM_GENRES = [['발라드', '#5B7CFA'], ['댄스', '#FF5A7A'], ['힙합', '#2B2B2B'], ['R&B', '#8B5CF6'], ['인디', '#22A06B'], ['록', '#E4572E'],
     ['트로트', '#F59E0B'], ['OST', '#0EA5E9'], ['팝송', '#EC4899'], ['재즈', '#7C5A3A'], ['클래식', '#64748B'], ['로파이', '#14B8A6']];
   // 무드·상황 (멜론 'Mood Play'·탐색 무드처럼): [이름, 색, 검색어]. 계절 것은 그 철에만
@@ -5968,11 +5979,11 @@
         }, fail);
         return;
       }
-      gmGet('chart:' + ch.id, function () { return gmPlaylist(ch.list, 100); }).then(function (list) {
+      gmGet('chart:' + ch.id, function () { return gmChartList(ch); }).then(function (list) {
         if (token !== GM.token) return;
         load.remove();
         var delta = gmChartDelta(ch.id, list);
-        body.appendChild(G.el('div', { 'class': 'gm-cap', text: '유튜브 공식 차트 · 이번 주 가장 많이 들은 노래' + (delta ? ' · 지난 차트와 비교' : '') }));
+        body.appendChild(G.el('div', { 'class': 'gm-cap', text: (ch.cap || '') + (delta ? ' · 지난 차트와 비교' : '') }));
         body.appendChild(gmActs(list));
         body.appendChild(gmList(list, true, delta));
       }, fail);
@@ -6275,6 +6286,8 @@
       '#glide-mp .cmr small{display:block;font:500 12px/1.3 ' + F + ';color:rgba(255,255,255,.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
       '#glide-mp .cmr p{margin:3px 0 0;font:400 14px/1.45 ' + F + ';color:rgba(255,255,255,.92);white-space:pre-wrap;word-break:break-word;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}#glide-mp .cmr p.open{display:block}' +
       '#glide-mp .cmf{display:flex;align-items:center;gap:6px;margin-top:6px;font:500 12px/1 ' + F + ';color:rgba(255,255,255,.6)}#glide-mp .cmf i{width:15px;height:15px;background-color:rgba(255,255,255,.7);-webkit-mask:url("' + gmIcon('thumb') + '") center/15px 15px no-repeat}#glide-mp .cmf em{margin-left:14px;font-style:normal;color:#9cc4ff}' +
+      '#glide-mp .cmrb{all:unset;display:flex;align-items:center;gap:6px;margin:0 18px 2px 58px;padding:8px 0;font:600 13px/1 ' + F + ';color:#3ea6ff;cursor:pointer;-webkit-tap-highlight-color:transparent}#glide-mp .cmrb:active{opacity:.6}#glide-mp .cmrb i{width:8px;height:8px;border:solid currentColor;border-width:0 1.8px 1.8px 0;transform:translateY(-2px) rotate(45deg);transition:transform .2s}#glide-mp .cmrb.open i{transform:translateY(2px) rotate(-135deg)}' +
+      '#glide-mp .cmrp{margin-left:40px}#glide-mp .cmrp .cmr{padding:8px 18px}#glide-mp .cmrp .cmr img{width:22px;height:22px;border-radius:11px}#glide-mp .cmrp[hidden]{display:none}#glide-mp .cmrp .cmrb{margin-left:18px}#glide-mp .cmrl{margin:0 18px 0 58px;padding:6px 0;font:400 12px/1 ' + F + ';color:rgba(255,255,255,.45)}' +
       '#glide-mp .cmn{padding:40px 0;text-align:center;font:500 14px/1.5 ' + F + ';color:rgba(255,255,255,.55)}' +
       '#glide-mp .sl .plnew{color:#DDF46A}#glide-mp .sl .plrow{display:flex;align-items:center;gap:12px;padding:8px 10px}#glide-mp .sl .plrow span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#glide-mp .sl .plrow small{font:500 12px/1 ' + F + ';color:rgba(255,255,255,.5)}' +
       '#glide-mp .sl .plrow .pl-cv{position:relative;flex:none;width:40px;height:40px;border-radius:8px;overflow:hidden;background:rgba(255,255,255,.1);display:grid}#glide-mp .sl .plrow .pl-cv.q{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}#glide-mp .sl .plrow .pl-cv img{width:100%;height:100%;object-fit:cover;display:block}#glide-mp .sl .plrow .pl-cv i{display:none}' +
@@ -6427,16 +6440,20 @@
     G.onCommand('musicRepeat', function () { if (MP.on) mpRepeat(); });
     G.onCommand('musicLike', function () { if (MP.on) mpLike(); });
     // 이어폰·알림·잠금화면의 이전/다음: 음악이면 재생 화면의 ⏮·⏭ 와 똑같이 (스트리밍 중에도 — 예전에는 유튜브의 이전 영상·추천 영상으로 갔음)
+    var MKY = { want: false, at: 0, gen: 0 };
     if (G.setMediaKeys) G.setMediaKeys(function (cmd) {
       if (!MP.on || !onWatch()) return false;
       if (cmd === 'toggle' || cmd === 'play' || cmd === 'pause') {
         // 실제로 재생 중인지 보고 바꿈 (앱이 알던 상태가 잠깐 어긋나 있어도 먹게). 유튜브 플레이어 함수로 (영상 요소만 건드리면 유튜브 상태와 어긋날 수 있음)
         var p = mainPlayer(), v = mpVideo();
-        var playing = v ? !v.paused && !v.ended : false;
+        // 유튜브 플레이어는 playVideo 뒤 실제로 움직이기까지 시간이 걸려, 그 사이 다시 누르면 아직 멈춤으로 보고 또 '재생'을 보냈음 → 1.2초 안의 누름은 방금 보낸 뜻을 기준으로
+        var recent = MKY.at && Date.now() - MKY.at < 1200;
+        var playing = recent ? MKY.want : (v ? !v.paused && !v.ended : false);
         var want = cmd === 'toggle' ? !playing : cmd === 'play';
+        MKY.want = want; MKY.at = Date.now(); var gen = ++MKY.gen;
         if (want) {
           var api = false; try { if (p && typeof p.playVideo === 'function') { p.playVideo(); api = true; } } catch (e) { /* ignore */ }
-          var kick = function () { if (v && v.paused && !v.ended) { var r = v.play(); if (r && r.catch) r.catch(function () {}); } };
+          var kick = function () { if (MKY.gen !== gen) return; /* 그 사이 멈춤을 눌렀으면 다시 틀지 않음 */ if (v && v.paused && !v.ended) { var r = v.play(); if (r && r.catch) r.catch(function () {}); } };
           if (!api) kick(); else G.setTimeout.call(W, kick, 400); // 플레이어가 안 움직였으면 영상 요소로 한 번 더
         } else {
           try { if (p && typeof p.pauseVideo === 'function') p.pauseVideo(); } catch (e) { /* ignore */ }
@@ -6715,7 +6732,49 @@
       var likes = recText(cr.voteCount), reps = cr.replyCount ? String(cr.replyCount) : '';
       return G.el('div', { 'class': 'cmr' }, [G.el('img', { src: recUrl(img), alt: '', loading: 'lazy' }), G.el('div', {}, [
         G.el('small', { text: recText(cr.authorText) + ' · ' + recText(cr.publishedTimeText) }), p,
-        G.el('div', { 'class': 'cmf' }, [G.el('i'), G.el('span', { text: likes || '' }), reps ? G.el('em', { text: '답글 ' + reps + '개' }) : null])])]);
+        G.el('div', { 'class': 'cmf' }, [G.el('i'), G.el('span', { text: likes || '' })])])]);
+    };
+    // 답글 (2026-11-26 사용자: 음악 댓글에서 답글이 안 보임): 댓글 아래 '답글 N개 ⌄' → 그 자리에 펼침, 더 있으면 '답글 더보기', 다시 누르면 접힘 (유튜브 앱처럼)
+    var repTok = function (o) { var m = o && JSON.stringify(o).match(/"(?:token|continuation)":"([^"]+)"/); return m ? m[1] : null; };
+    var thread = function (th) {
+      var cr = th.comment && th.comment.commentRenderer; if (!cr) return null;
+      var wrap = G.el('div', { 'class': 'cmth' }, [row(cr)]);
+      var tok = repTok(th.replies), n = cr.replyCount ? String(cr.replyCount) : '';
+      if (!tok) return wrap;
+      var box = G.el('div', { 'class': 'cmrp', hidden: '' }), got = false, more = null, busy = false;
+      var label = '답글 ' + (n ? n + '개' : '보기');
+      var btn = G.el('button', { type: 'button', 'class': 'cmrb' }, [G.el('i'), G.el('span', { text: label })]);
+      var fetchRep = function (t, moreBtn) {
+        if (busy) return; busy = true;
+        var ld = G.el('div', { 'class': 'cmrl', text: '불러오는 중…' }); box.appendChild(ld);
+        yti('next', { continuation: t }).then(function (j) {
+          busy = false; ld.remove(); if (moreBtn) moreBtn.remove(); more = null;
+          if (CMS !== c) return;
+          var k = 0;
+          (function walk(o, depth) {
+            if (!o || typeof o !== 'object' || depth > 30) return;
+            if (o.commentRenderer) { box.appendChild(row(o.commentRenderer)); k++; return; }
+            if (o.continuationItemRenderer) { more = repTok(o.continuationItemRenderer); return; }
+            for (var key in o) walk(o[key], depth + 1);
+          })(j, 0);
+          if (!k && !box.querySelector('.cmr')) box.appendChild(G.el('div', { 'class': 'cmrl', text: '답글을 받지 못했어요' }));
+          if (more) {
+            var mb = G.el('button', { type: 'button', 'class': 'cmrb' }, [G.el('i'), G.el('span', { text: '답글 더보기' })]);
+            var mt = more;
+            mb.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); G.send('haptic', { kind: 'gesture' }); fetchRep(mt, mb); }, true);
+            box.appendChild(mb);
+          }
+        }, function () { busy = false; ld.textContent = '답글을 받지 못했어요'; });
+      };
+      btn.addEventListener('click', function (e) {
+        e.preventDefault(); e.stopPropagation(); G.send('haptic', { kind: 'gesture' });
+        var open = box.hidden;
+        box.hidden = !open; btn.classList.toggle('open', open);
+        btn.lastChild.textContent = open ? '답글 숨기기' : label;
+        if (open && !got) { got = true; fetchRep(tok, null); }
+      }, true);
+      wrap.appendChild(btn); wrap.appendChild(box);
+      return wrap;
     };
     var load = function (tok, first) {
       if (!tok || c.busy) return; c.busy = true;
@@ -6727,6 +6786,7 @@
         var n = 0; c.more = null;
         (function walk(o, depth) {
           if (!o || typeof o !== 'object' || depth > 30) return;
+          if (o.commentThreadRenderer) { var tw = thread(o.commentThreadRenderer); if (tw) { body.appendChild(tw); n++; } return; }
           if (o.commentRenderer) { body.appendChild(row(o.commentRenderer)); n++; return; }
           if (o.continuationItemRenderer) { var ce = JSON.stringify(o.continuationItemRenderer).match(/"token":"([^"]+)"/); if (ce) c.more = ce[1]; return; }
           for (var k in o) walk(o[k], depth + 1);

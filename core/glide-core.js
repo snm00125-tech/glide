@@ -17,7 +17,7 @@
 (function () {
   'use strict';
 
-  var CORE_VERSION = '1.0.1';
+  var CORE_VERSION = '1.0.2';
   var CORE_API = 3; // filters.json의 minCore와 비교
 
   var W = window;
@@ -1810,6 +1810,7 @@
   function mainPlayer() {
     return document.querySelector('#movie_player') || document.querySelector(F.player.selector);
   }
+  var TGL = { on: false, at: 0 };
   function runCommand(cmd, arg) {
     if (localMedia && PLATFORM === 'android') { try { if (localMedia(cmd, arg)) return; } catch (e) { log('error', 'cmd', '저장된 곡 조작 실패: ' + e.message); } }
     if (mediaKeys && PLATFORM === 'android') { try { if (mediaKeys(cmd, arg)) return; } catch (e) { log('error', 'cmd', '음악 ' + cmd + ' 실패: ' + e.message); } }
@@ -1829,7 +1830,12 @@
       switch (cmd) {
         case 'play': if (v) v.play(); break;
         case 'pause': if (v) v.pause(); break;
-        case 'toggle': if (v) { if (v.paused) v.play(); else v.pause(); } break;
+        case 'toggle': if (v) {
+          // 연달아 누를 때(이어폰): 1.2초 안이면 방금 보낸 뜻을 기준으로 뒤집음 (영상이 아직 반응하기 전이라 같은 명령이 두 번 가던 것)
+          var wasOn = TGL.at && Date.now() - TGL.at < 1200 ? TGL.on : !v.paused;
+          TGL.on = !wasOn; TGL.at = Date.now();
+          if (TGL.on) { var pr = v.play(); if (pr && pr.catch) pr.catch(function () {}); } else v.pause();
+        } break;
         case 'next':
           if (p && typeof p.nextVideo === 'function') p.nextVideo();
           else { var nb = document.querySelector('.ytp-next-button, button[aria-label*="다음"], .player-controls-middle button:last-child'); if (nb) nb.click(); }
