@@ -1,14 +1,12 @@
 {
-  "versionCode": 30002,
-  "versionName": "1.0.2",
-  "apk": "https://raw.githubusercontent.com/snm00125-tech/glide/main/apk/glide-1.0.2.apk",
-  "sha256": "476f37aa4fddfb3703944b118b4e2638466c81c35a373b3d36da09ae563bac21",
-  "size": 4730048,
+  "versionCode": 30003,
+  "versionName": "1.0.3",
+  "apk": "https://raw.githubusercontent.com/snm00125-tech/glide/main/apk/glide-1.0.3.apk",
+  "sha256": "5b9b2020a6f286442cd973dfb17060574de6cc118c682f40b683c62bf19c97d0",
+  "size": 4730220,
   "notes": [
-    "음악 재생 화면 댓글에서 답글을 펼쳐 볼 수 있어요 (답글 N개 → 펼치기·더보기·숨기기)",
-    "음악 탭 차트에 멜론 TOP100이 생겼어요 (멜론 일간 차트, 기본). 유튜브 TOP100·해외 TOP100도 그대로 있어요",
-    "내 페이지의 시청 기록 줄이 다시 보이던 문제를 고쳤어요 (지문으로 여는 시청 기록만 보여요)",
-    "이어폰·블루투스 버튼으로 재생·멈춤을 여러 번 눌러도 안 먹는 때가 없게 고쳤어요"
+    "위젯의 ▶만 눌렀는데 앱이 열리던 문제를 고쳤어요 — 앱이 뒤에 켜져 있으면 열지 않고 바로 마지막 곡부터 들려줘요",
+    "노래를 멈춰 둬도 이어폰 버튼이 다른 앱이 아니라 Glide로 와요 (재생 알림을 닫기 전까지)"
   ],
   "date": "2026-11-26"
 }
