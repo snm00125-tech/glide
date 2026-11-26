@@ -2237,6 +2237,31 @@
   document.addEventListener('animationstart', function (e) { if (e.animationName === ANIM) [50, 1000, 3000].forEach(function (ms) { G.setTimeout.call(W, reportTheme, ms); }); }, true);
   try { W.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () { G.setTimeout.call(W, reportTheme, 300); }); } catch (e) { /* ignore */ }
   W.addEventListener('yt-navigate-finish', function () { [100, 700].forEach(function (ms) { G.setTimeout.call(W, reportTheme, ms); }); }, true);
+  // 불러온 뒤 테마 바꾸기 (2026-11-26 사용자: 영상 보는 중 다크 모드로 바꿔도 흰 화면 그대로). 유튜브 색은 이름이 섞인 변수 약 165개이고
+  // 값은 테마마다 다른 스타일 파일(link#c3-css, 주소의 am= 가 다름)에 있음(실제 사이트 확인). 앱이 PREF 쿠키를 먼저 고친 뒤 이 명령을 보내면
+  // 첫 화면 HTML 에서 새 테마의 파일 주소를 읽어 바꿔 낌 → 새로 불러오지 않아 영상이 멈추지 않음. 안 되면 앱이 예전처럼 새로 불러옴
+  var TLV = { gen: 0 };
+  G.onCommand('themeLive', function (arg) {
+    var want = !!(arg && arg.dark), gen = ++TLV.gen;
+    var done = function (how) { if (gen !== TLV.gen) return; lastTheme = null; [60, 400, 1200].forEach(function (ms) { G.setTimeout.call(W, function () { reportTheme(); try { recTheme(); } catch (e) { /* ignore */ } }, ms); }); log('info', '테마 바로 바꿈 (' + (want ? '어둡게' : '밝게') + ', ' + how + ')'); };
+    fetch('/', { credentials: 'include', cache: 'no-store' }).then(function (r) { return r.text(); }).then(function (html) {
+      if (gen !== TLV.gen) return;
+      var m = /<link id="c3-css" href="([^"]+)"/.exec(html);
+      if (!m) { log('warn', '테마 바꾸기: 스타일 파일 주소를 못 찾음'); return; }
+      var href = m[1].replace(/&amp;/g, '&'), old = document.getElementById('c3-css');
+      if (old && old.href === href) { done('이미 같음'); return; }
+      var l = document.createElement('link'); l.rel = 'stylesheet'; l.href = href;
+      l.onload = function () {
+        if (old && old.parentNode) old.parentNode.removeChild(old);
+        l.id = 'c3-css';
+        // 믹스·재생목록 막대는 유튜브 스크립트가 만들 때의 테마 색을 style 에 박아 둠 → 지워서 스타일 파일 색을 따르게
+        document.querySelectorAll('ytm-playlist-panel-entry-point[style*="background"]').forEach(function (e) { e.style.removeProperty('background-color'); });
+        done('스타일 파일 교체');
+      };
+      l.onerror = function () { if (l.parentNode) l.parentNode.removeChild(l); log('warn', '테마 바꾸기: 스타일 파일을 못 받음'); };
+      if (old && old.parentNode) old.parentNode.insertBefore(l, old.nextSibling); else (document.head || document.documentElement).appendChild(l);
+    }).catch(function () { log('warn', '테마 바꾸기: 첫 화면을 못 받음'); });
+  });
 
   // ===========================================================================
   // 영상 코덱: 이 기기에 AV1 하드웨어 디코더가 없으면(앱이 기기에서 확인해 알려 줌) 유튜브가 AV1을 고르지 않게.

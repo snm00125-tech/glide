@@ -1,11 +1,11 @@
 {
-  "versionCode": 30004,
-  "versionName": "1.0.4",
-  "apk": "https://raw.githubusercontent.com/snm00125-tech/glide/main/apk/glide-1.0.4.apk",
-  "sha256": "667240d1ee9f4d312b749ebfb4526ecc8a41a6710b4159b141c4a7b19c057025",
-  "size": 4730984,
+  "versionCode": 30005,
+  "versionName": "1.0.5",
+  "apk": "https://raw.githubusercontent.com/snm00125-tech/glide/main/apk/glide-1.0.5.apk",
+  "sha256": "823a28b11dce8280b975bc050b364188e5325c6e00db3e59fc2b7229c406256f",
+  "size": 4732040,
   "notes": [
-    "폴드를 펼친 화면에서 전체화면 가로·세로 버튼이 안 먹던 문제를 고쳤어요"
+    "영상을 보는 중에 다크 모드를 켜고 꺼도 화면이 바로 바뀌어요 (영상은 멈추지 않아요)"
   ],
   "date": "2026-11-26"
 }
