@@ -2,7 +2,7 @@
 //  - 설정·필터·통계·로그 저장 (chrome.storage.local 이 단일 원본)
 //  - 2층 광고 서버 차단: declarativeNetRequest 동적 규칙
 //  - 필터 원격 업데이트 (GitHub raw)
-const CORE_API = 3; // core/glide-core.js 의 CORE_API 와 같아야 함
+const CORE_API = 4; // core/glide-core.js 의 CORE_API 와 같아야 함
 const LOG_MAX = 600;
 const RULE_START = 1;
 
