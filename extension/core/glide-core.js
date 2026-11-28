@@ -17,7 +17,7 @@
 (function () {
   'use strict';
 
-  var CORE_VERSION = '1.0.8';
+  var CORE_VERSION = '1.0.9';
   var CORE_API = 4; // filters.json의 minCore와 비교
 
   var W = window;
@@ -869,7 +869,8 @@
       return p.then(function (res) {
         if (!res || res.type === 'opaque' || res.bodyUsed) return res;
         return res.clone().text().then(function (text) {
-          var out = pruneText(text, 'fetch ' + shortUrl(url));
+          // Glide 가 직접 부른 요청(init.glideOwn)은 표시를 붙임 → 홈에서 노래 빼기 등이 음악 탭·추천 탭 목록은 건드리지 않음
+          var out = pruneText(text, 'fetch ' + shortUrl(url) + (init && init.glideOwn ? ' #glide' : ''));
           if (url.indexOf('/ad_break') !== -1) logAdBreak(out !== null ? out : text, out !== null);
           if (out === null) return res;
           var nr = new NativeResponse(out, { status: res.status, statusText: res.statusText, headers: res.headers });

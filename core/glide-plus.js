@@ -266,6 +266,74 @@
   });
 
   // ===========================================================================
+  // 홈에서 노래 빼기 (2026-11-28, 사용자: "노래를 계속 들으니 홈의 절반 넘게 노래·재생목록으로 덮였다. 동영상 홈엔 동영상만, 뮤직비디오는 검색해서 보면 된다")
+  //  홈(주소 '/')의 목록에서만: 재생목록·믹스(데이터 종류), 뮤직비디오·가사·무대·플레이리스트 영상(제목), 음악 채널(Topic·기획사·음악 방송).
+  //  검색·채널·구독·영상 아래 추천은 그대로. 설정 hideHomeMusic(기본 켬). 낱말은 filters.json plus.homeMusic 으로 고칠 수 있음
+  // ===========================================================================
+  var HM_LIST = { compactRadioRenderer: 1, radioRenderer: 1, playlistRenderer: 1, compactPlaylistRenderer: 1, gridPlaylistRenderer: 1 };
+  var HM_TITLE = '(\\bm\\/?v\\b|뮤직 ?비디오|뮤비|music video|official (audio|video|visualizer|lyric|mv|m\\/v)|lyric video|track video|\\blyrics?\\b|가사|visualizer|performance video|dance practice|안무 ?영상|live clip|special clip|라이브 ?클립|무대|교차 ?편집|직캠|fancam|커버|cover by|노래방|karaoke|playlist|(?<!뉴스)플레이리스트|플리(?!마켓)|노래 ?모음|노동요|\\bost\\b|full album|정규 ?앨범|뮤직|\\bmusic\\b|노래|\\bsongs?\\b|\\bk-?pop\\b|케이팝(?! ?데몬)|음악|가요|팝송|명곡|띵곡|믹스|\\bmix\\b|\\bremix\\b|음원)';
+  var HM_CH = '( - topic\\b| - 주제( |$)|vevo$|hybe labels|smtown|jyp entertainment|1thek|원더케이|stone music|mnet|kbs kpop|kbs world tv|mbckpop|sbs kpop|\\bm2\\b|딩고 ?뮤직|dingo music|킬링보이스|studio choom|스튜디오 춤|starshiptv|yg entertainment|bangtantv|genie ?music|지니뮤직|\\bmelon\\b|(?<![가-힣])멜론|kakao entertainment|\\bmusic\\b|뮤직|records$|레코즈)';
+  var HM = { t: null, c: null, src: '' };
+  function hmCompile() {
+    var p = (G.filters().plus || {}).homeMusic || {}, key = (p.title || '') + '|' + (p.channel || '');
+    if (HM.t && HM.src === key) return;
+    HM.src = key;
+    try { HM.t = new RegExp(p.title || HM_TITLE, 'i'); } catch (e) { HM.t = new RegExp(HM_TITLE, 'i'); }
+    try { HM.c = new RegExp(p.channel || HM_CH, 'i'); } catch (e) { HM.c = new RegExp(HM_CH, 'i'); }
+  }
+  function hmNorm(t) { try { t = t.normalize('NFKC'); } catch (e) { /* 옛 엔진 */ } return t.toLowerCase().trim(); }
+  function musicReason(it) {
+    var k = firstKey(it), body = it[k];
+    if (k === 'richItemRenderer') { var c = body && body.content; k = c && firstKey(c); body = k ? c[k] : null; }
+    if (!k || !body || typeof body !== 'object') return null;
+    if (HM_LIST[k]) return '재생목록';
+    if (k === 'lockupViewModel') {
+      var ct = String(body.contentType || ''), id = String(body.contentId || '');
+      if (/PLAYLIST|ALBUM|PODCAST/.test(ct) || /^(RD|PL|OLAK|VL)/.test(id)) return '재생목록·믹스';
+    }
+    if (!ITEM_KEYS[k] || k === 'reelItemRenderer' || k === 'shortsLockupViewModel') return null;
+    hmCompile();
+    // 제목은 항목 깊숙이 있을 수 있어 넉넉히 읽음 (collect 의 600개 제한에서는 일부 제목을 못 읽었음)
+    var tx = [], st = [[body, 0]], seen = 0;
+    while (st.length && seen < 4000) {
+      var pr = st.pop(), o = pr[0], d = pr[1]; seen++;
+      if (!o || typeof o !== 'object' || d > 16) continue;
+      for (var kk in o) { var vv = o[kk]; if (typeof vv === 'string') { if (kk === 'text' || kk === 'simpleText' || kk === 'content' || kk === 'title' || kk === 'label') tx.push(vv); } else if (vv && typeof vv === 'object') st.push([vv, d + 1]); }
+    }
+    for (var i = 0; i < tx.length; i++) {
+      var t = hmNorm(tx[i]);
+      if (!t || t.length > 300) continue;
+      if (HM.c.test(t)) return '음악 채널';
+      if (HM.t.test(t)) return '노래';
+    }
+    return null;
+  }
+  G.addTransformer({
+    name: 'homeMusic',
+    active: function () { return S.enabled && opt('hideHomeMusic') !== false && location.pathname === '/' && G.mobileSite; },
+    run: function (root, src) {
+      // Glide 가 직접 받은 목록(음악 탭 차트·추천 탭, '#glide')은 그대로
+      if (src.indexOf('/next') !== -1 || src.indexOf('/player') !== -1 || src.indexOf('#glide') !== -1 || isSearchSrc(src)) return false;
+      var removed = 0, reasons = {}, stack = [root], visited = 0;
+      while (stack.length) {
+        var o = stack.pop();
+        if (++visited > 300000) break;
+        if (Array.isArray(o)) {
+          for (var i = o.length - 1; i >= 0; i--) {
+            var it = o[i];
+            if (!it || typeof it !== 'object') continue;
+            var why = musicReason(it);
+            if (why) { o.splice(i, 1); removed++; reasons[why] = (reasons[why] || 0) + 1; continue; }
+            stack.push(it);
+          }
+        } else for (var k in o) { var v = o[k]; if (v && typeof v === 'object') stack.push(v); }
+      }
+      if (removed) log('info', '홈에서 노래 ' + removed + '개 뺌 (' + src + '): ' + Object.keys(reasons).map(function (r) { return r + '×' + reasons[r]; }).join(', '));
+      return removed > 0;
+    }
+  });
+
+  // ===========================================================================
   // 가장 많이 본 구간 (유튜브의 '가장 많이 다시 본 구간' 그래프 데이터)
   // ===========================================================================
   var PK = {}; // videoId → [{s, d, v}]

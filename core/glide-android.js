@@ -3895,7 +3895,7 @@
     var c = W.ytcfg;
     if (!c || !c.get) return Promise.reject(new Error('ytcfg 없음'));
     return fetch('/youtubei/v1/' + ep + '?prettyPrint=false', {
-      method: 'POST', credentials: 'omit',
+      method: 'POST', credentials: 'omit', glideOwn: 1,
       headers: { 'content-type': 'application/json', 'x-youtube-client-name': String(c.get('INNERTUBE_CONTEXT_CLIENT_NAME') || 2), 'x-youtube-client-version': String(c.get('INNERTUBE_CLIENT_VERSION') || '') },
       body: JSON.stringify(Object.assign({ context: c.get('INNERTUBE_CONTEXT') }, body))
     }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
@@ -5310,7 +5310,7 @@
     return gmAuthHeader().then(function (auth) {
       if (!auth) return null;
       return fetch('/youtubei/v1/browse?prettyPrint=false', {
-        method: 'POST', credentials: 'include',
+        method: 'POST', credentials: 'include', glideOwn: 1,
         headers: { 'content-type': 'application/json', authorization: auth, 'x-origin': location.origin, 'x-goog-authuser': '0',
           'x-youtube-client-name': String(c.get('INNERTUBE_CONTEXT_CLIENT_NAME') || 2), 'x-youtube-client-version': String(c.get('INNERTUBE_CLIENT_VERSION') || '') },
         body: JSON.stringify({ context: c.get('INNERTUBE_CONTEXT'), browseId: 'VLLL' })
@@ -7058,7 +7058,7 @@
     return gmAuthHeader().then(function (auth) {
       if (!auth) return null;
       return fetch('/youtubei/v1/' + ep + '?prettyPrint=false', {
-        method: 'POST', credentials: 'include',
+        method: 'POST', credentials: 'include', glideOwn: 1,
         headers: { 'content-type': 'application/json', authorization: auth, 'x-origin': location.origin, 'x-goog-authuser': '0',
           'x-youtube-client-name': String(c.get('INNERTUBE_CONTEXT_CLIENT_NAME') || 2), 'x-youtube-client-version': String(c.get('INNERTUBE_CLIENT_VERSION') || '') },
         body: JSON.stringify(Object.assign({ context: c.get('INNERTUBE_CONTEXT') }, body))

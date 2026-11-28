@@ -1,11 +1,11 @@
 {
-  "versionCode": 30008,
-  "versionName": "1.0.8",
-  "apk": "https://raw.githubusercontent.com/snm00125-tech/glide/main/apk/glide-1.0.8.apk",
-  "sha256": "35cf666bac00c3e3bbca4f9db36643ee4ac0a06fad223eb3f526b32beeccd50b",
-  "size": 4761312,
+  "versionCode": 30009,
+  "versionName": "1.0.9",
+  "apk": "https://raw.githubusercontent.com/snm00125-tech/glide/main/apk/glide-1.0.9.apk",
+  "sha256": "f442b4476c33547eec18d71c82175816b9f3fbd8f1547db331ee99c213938219",
+  "size": 4763164,
   "notes": [
-    "앱이 뒤에 켜져 있을 때 위젯 ▶를 눌러도 노래가 나오지 않고 전에 본 동영상 알림만 뜨던 문제를 고쳤어요"
+    "홈에서 노래 빼기: 노래를 많이 들어도 동영상 홈에는 뮤직비디오·노래 영상·재생목록·믹스가 나오지 않아요. 검색하면 그대로 나와요 (설정 › 동영상 › 편의 기능에서 끌 수 있어요)"
   ],
   "date": "2026-11-28"
 }
