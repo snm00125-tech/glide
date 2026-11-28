@@ -1,16 +1,11 @@
 {
-  "versionCode": 30007,
-  "versionName": "1.0.7",
-  "apk": "https://raw.githubusercontent.com/snm00125-tech/glide/main/apk/glide-1.0.7.apk",
-  "sha256": "04877ecf50c7c02684d91bb4286f3cdb997c44c4f2c6715ecfbcc7d5a399d9f1",
-  "size": 4761028,
+  "versionCode": 30008,
+  "versionName": "1.0.8",
+  "apk": "https://raw.githubusercontent.com/snm00125-tech/glide/main/apk/glide-1.0.8.apk",
+  "sha256": "35cf666bac00c3e3bbca4f9db36643ee4ac0a06fad223eb3f526b32beeccd50b",
+  "size": 4761312,
   "notes": [
-    "Glide Music으로 듣는 노래가 유튜브 홈 추천에 덜 섞이도록, 노래를 들을 때는 유튜브에 시청·활동 기록을 보내지 않아요 (동영상은 그대로)",
-    "백업·복원: 설정 › 앱 › 백업에서 플레이리스트·설정·이어보기를 파일 하나로 저장하고 되살려요. 매주 자동 백업(문서 › Glide)도 돼요",
-    "구간 반복(A–B): 영상은 ⚙ 설정 메뉴, 노래는 재생 화면 ⋮ 메뉴에서 원하는 구간만 계속 반복해요",
-    "낚시 제목 바꾸기: 사람들이 고친 제목(원하면 썸네일도)으로 보여 줘요 (설정 › 동영상 › 편의 기능)",
-    "구독 채널 묶음: 구독 탭에서 내가 만든 묶음이나 안 본 영상만 골라 봐요 (＋로 만들고, 길게 눌러 고쳐요)",
-    "플레이리스트 공유: 내 플레이리스트를 링크로 보내고, 받은 링크를 Glide로 열면 바로 담을 수 있어요"
+    "앱이 뒤에 켜져 있을 때 위젯 ▶를 눌러도 노래가 나오지 않고 전에 본 동영상 알림만 뜨던 문제를 고쳤어요"
   ],
-  "date": "2026-11-27"
+  "date": "2026-11-28"
 }
